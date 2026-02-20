@@ -1,4 +1,7 @@
 # QuickStreamAppAdd
+
+（该项目即将更名为[Sunshine App Manager](https://github.com/gmaox/QuickStreamAppAdd/issues/3)并带来更好的体验）
+
 将工作目录所有快捷方式一键导入到sunshine应用程序并自动处理封面<p>
 
 [蓝奏云下载链接](https://wwse.lanzoub.com/b00uymuaha) 密码:9cj7
