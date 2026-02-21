@@ -175,7 +175,28 @@ class EditGameCard(QtWidgets.QFrame):
         if self.manage_window:
             self.manage_window.show_edit_panel(self.entry)
         else:
-            pass
+            # 如果没有manage_window引用，降级使用弹出对话框
+            dlg = QtWidgets.QDialog(self)
+            dlg.setWindowTitle('编辑游戏信息')
+            dlg.setModal(True)
+            layout = QtWidgets.QVBoxLayout(dlg)
+            layout.addWidget(QtWidgets.QLabel('游戏名称:'))
+            name_e = QtWidgets.QLineEdit(self.entry.get('name', ''))
+            layout.addWidget(name_e)
+            layout.addWidget(QtWidgets.QLabel('命令行/路径:'))
+            cmd_e = QtWidgets.QLineEdit(self.entry.get('cmd', ''))
+            layout.addWidget(cmd_e)
+            btns = QtWidgets.QHBoxLayout()
+            save_btn = QtWidgets.QPushButton('保存')
+            cancel_btn = QtWidgets.QPushButton('取消')
+            btns.addWidget(save_btn)
+            btns.addWidget(cancel_btn)
+            layout.addLayout(btns)
+
+            save_btn.clicked.connect(lambda: self._save_edit_legacy(name_e.text(), cmd_e.text(), dlg))
+            cancel_btn.clicked.connect(dlg.reject)
+            dlg.exec_()
+
     def _save_edit_legacy(self, name, cmd, dlg):
         """降级的保存编辑方法（用于弹出对话框模式）"""
         self.entry['name'] = name
