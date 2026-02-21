@@ -15,6 +15,12 @@ try:
 except Exception:
     ManageWindow = None
 
+# 嵌入添加游戏界面
+try:
+    from add_games import AddGameWindow
+except Exception:
+    AddGameWindow = None
+
 
 # 日志信号发射器
 class LogSignalEmitter(QObject):
@@ -69,6 +75,7 @@ class LogTab(QWidget):
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Courier New", 10))
+        self.log_text.setStyleSheet("background-color: #f5f5f5;")
         layout.addWidget(self.log_text)
         
         # 清空日志按钮
@@ -260,13 +267,17 @@ class LogTab(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("pytk 标签页示例")
-        self.setGeometry(100, 100, 900, 520)
+        self.setWindowTitle("Sunshine App Manager")
+        self.resize(900, 480)
 
         tab_names = [
             '添加游戏', '浏览游戏', '日志', '设置',
             '忽略列表', '添加扫描器', '扫描器管理'
         ]
+
+        # 设置全局字体为微软雅黑
+        app = QApplication.instance()
+        app.setFont(QFont("Microsoft YaHei", 10))
 
         # 主容器
         main_widget = QWidget()
@@ -301,7 +312,12 @@ class MainWindow(QMainWindow):
             v.setSpacing(6)
             
             # 根据标签页索引创建不同内容
-            if i == 1 and ManageWindow is not None:
+            if i == 0 and AddGameWindow is not None:
+                # 添加游戏 - 嵌入添加游戏窗口
+                add_game_widget = AddGameWindow()
+                add_game_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                v.addWidget(add_game_widget)
+            elif i == 1 and ManageWindow is not None:
                 # 浏览游戏 - 嵌入管理窗口
                 manage_widget = ManageWindow()
                 # 作为内嵌控件时去掉独立窗口的最小尺寸限制
@@ -358,6 +374,6 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-    print("这是一个普通日志输出示例。")
+    print("初始化完成")
     window.show()
     sys.exit(app.exec_())
