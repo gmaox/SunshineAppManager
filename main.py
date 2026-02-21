@@ -21,6 +21,12 @@ try:
 except Exception:
     AddGameWindow = None
 
+# 嵌入设置页面
+try:
+    from settings_page import SettingsPage
+except Exception:
+    SettingsPage = None
+
 
 # 日志信号发射器
 class LogSignalEmitter(QObject):
@@ -327,6 +333,11 @@ class MainWindow(QMainWindow):
                 # 日志标签页
                 log_tab = LogTab(self)
                 v.addWidget(log_tab)
+            elif i == 3 and SettingsPage is not None:
+                # 设置标签页
+                settings_widget = SettingsPage()
+                settings_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                v.addWidget(settings_widget)
             else:
                 # 其他标签页 - 显示占位符
                 label = QLabel(f"这是标签页{i+1}的内容")
