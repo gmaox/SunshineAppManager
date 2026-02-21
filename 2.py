@@ -1,5 +1,5 @@
 from PyQt5.QtGui import QFont, QColor, QTextCursor, QTextCharFormat
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QPropertyAnimation, QEasingCurve, QRect, QParallelAnimationGroup
 import sys
 from io import StringIO
 
@@ -48,6 +48,8 @@ class LogTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_window = parent
+        self.show_anim_group = None
+        self.close_anim_group = None
         self.init_ui()
         
         # 创建日志信号发射器
@@ -119,45 +121,140 @@ class LogTab(QWidget):
         if not self.parent_window:
             return
         
-        # 创建或获取通知标签
+        # 创建或获取通知容器
         if not hasattr(self.parent_window, 'error_notification'):
-            notification = QLabel(self.parent_window)
+            # 创建容器 widget
+            notification = QWidget(self.parent_window)
             notification.setStyleSheet(
-                "background-color: #ffcccc; border: 2px solid #ff0000; "
-                "padding: 10px; border-radius: 5px; font-weight: bold; color: #cc0000;"
+                "QWidget {background-color: #ffcccc; border: 2px solid #ff0000; "
+                "padding: 8px; border-radius: 5px;}"
             )
-            notification.setFont(QFont("Segoe UI", 10))
-            notification.setWordWrap(True)
-            notification.setMaximumWidth(300)
+            
+            # 创建布局
+            layout = QHBoxLayout()
+            layout.setContentsMargins(10, 8, 5, 8)
+            layout.setSpacing(10)
+            
+            # 创建文本标签
+            text_label = QLabel()
+            text_label.setFont(QFont("Segoe UI", 10))
+            text_label.setStyleSheet("color: #cc0000; background: transparent; border: none;")
+            text_label.setWordWrap(True)
+            notification.text_label = text_label
+            layout.addWidget(text_label)
+            
+            # 创建关闭按钮
+            close_btn = QPushButton("✕")
+            close_btn.setStyleSheet(
+                "QPushButton {background: transparent; border: none; color: #cc0000; font-weight: bold; font-size: 14px; padding: 0px;}"
+                "QPushButton:hover {color: #ff0000;}"
+            )
+            close_btn.setFixedSize(20, 20)
+            close_btn.clicked.connect(lambda: self.close_error_notification_with_animation())
+            layout.addWidget(close_btn)
+            
+            notification.setLayout(layout)
+            notification.setWindowOpacity(0)  # 初始透明度为 0
             self.parent_window.error_notification = notification
             
             # 创建隐藏定时器
             if not hasattr(self.parent_window, 'notification_timer'):
                 self.parent_window.notification_timer = QTimer(self.parent_window)
                 self.parent_window.notification_timer.timeout.connect(
-                    lambda: self.parent_window.error_notification.hide()
+                    lambda: self.close_error_notification_with_animation()
                 )
         
         notification = self.parent_window.error_notification
         
         # 截断过长的错误信息
         display_text = error_text[:100] + "..." if len(error_text) > 100 else error_text
-        notification.setText(f"❌ 错误：{display_text}")
+        notification.text_label.setText(f"❌ 错误：{display_text}")
         
-        # 计算右下角位置
-        geometry = self.parent_window.geometry()
+        # 计算右下角位置（相对于父窗口）
+        rect = self.parent_window.rect()
         notification_width = notification.sizeHint().width() + 20
         notification_height = notification.sizeHint().height() + 20
         
-        pos_x = geometry.x() + geometry.width() - notification_width - 15
-        pos_y = geometry.y() + geometry.height() - notification_height - 15
+        pos_x = rect.right() - notification_width - 15
+        pos_y = rect.bottom() - notification_height - 15
         
-        notification.setGeometry(pos_x, pos_y, notification_width, notification_height)
+        # 初始位置在右边关闭外面
+        start_x = rect.right() + 20
+        notification.setGeometry(start_x, pos_y, notification_width, notification_height)
         notification.show()
+        
+        # 创建显示动画
+        self.show_notification_animation(notification, start_x, pos_x, pos_y, notification_width, notification_height)
         
         # 3秒后隐藏通知
         self.parent_window.notification_timer.stop()
         self.parent_window.notification_timer.start(3000)
+    
+    def show_notification_animation(self, notification, start_x, end_x, pos_y, width, height):
+        """显示通知的动画：从右往左渐显"""
+        # 透明度动画
+        opacity_anim = QPropertyAnimation(notification, b"windowOpacity")
+        opacity_anim.setDuration(400)
+        opacity_anim.setStartValue(0)
+        opacity_anim.setEndValue(1)
+        opacity_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        
+        # 位置动画
+        pos_anim = QPropertyAnimation(notification, b"geometry")
+        pos_anim.setDuration(400)
+        pos_anim.setStartValue(QRect(start_x, pos_y, width, height))
+        pos_anim.setEndValue(QRect(end_x, pos_y, width, height))
+        pos_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        
+        # 同时执行两个动画
+        if not hasattr(self, 'show_anim_group') or self.show_anim_group is None:
+            self.show_anim_group = QParallelAnimationGroup()
+        
+        self.show_anim_group.clear()
+        self.show_anim_group.addAnimation(opacity_anim)
+        self.show_anim_group.addAnimation(pos_anim)
+        self.show_anim_group.start()
+    
+    def close_error_notification_with_animation(self):
+        """关闭通知的动画：向右移动并渐隐"""
+        if not self.parent_window or not hasattr(self.parent_window, 'error_notification'):
+            return
+        
+        notification = self.parent_window.error_notification
+        if notification.isHidden():
+            return
+        
+        # 停止定时器
+        if hasattr(self.parent_window, 'notification_timer'):
+            self.parent_window.notification_timer.stop()
+        
+        rect = self.parent_window.rect()
+        current_g = notification.geometry()
+        
+        # 透明度动画
+        opacity_anim = QPropertyAnimation(notification, b"windowOpacity")
+        opacity_anim.setDuration(400)
+        opacity_anim.setStartValue(1)
+        opacity_anim.setEndValue(0)
+        opacity_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        
+        # 位置动画（向右移动）
+        end_x = rect.right() + 20
+        pos_anim = QPropertyAnimation(notification, b"geometry")
+        pos_anim.setDuration(400)
+        pos_anim.setStartValue(current_g)
+        pos_anim.setEndValue(QRect(end_x, current_g.y(), current_g.width(), current_g.height()))
+        pos_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        
+        # 同时执行两个动画
+        if not hasattr(self, 'close_anim_group') or self.close_anim_group is None:
+            self.close_anim_group = QParallelAnimationGroup()
+        
+        self.close_anim_group.clear()
+        self.close_anim_group.addAnimation(opacity_anim)
+        self.close_anim_group.addAnimation(pos_anim)
+        self.close_anim_group.finished.connect(lambda: notification.hide())
+        self.close_anim_group.start()
 
 
 class MainWindow(QMainWindow):
