@@ -15,12 +15,12 @@ class AddGameWindow(QWidget):
         """初始化UI界面"""
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(15)
+        main_layout.setSpacing(8)
         
         # ========== 左侧：开始添加 ==========
         left_widget = QFrame()
         left_layout = QVBoxLayout()
-        left_layout.setContentsMargins(20, 20, 20, 20)
+        left_layout.setContentsMargins(12, 20, 12, 20)
         left_layout.setSpacing(15)
         
         # 标题
@@ -59,7 +59,11 @@ class AddGameWindow(QWidget):
         left_desc4 = QLabel("如果您不想添加所有游戏，请点击\"忽略应用\"，然后选择您不想添加的那些应用，最后点击\"保存忽略项\"即可。")
         left_desc4.setFont(QFont("Segoe UI", 12))
         left_desc4.setWordWrap(True)
-        left_layout.addWidget(left_desc4)
+        left_layout.addWidget(left_desc4)        
+        left_desc5 = QLabel("（你也可以将游戏启动文件拖入此处添加）")
+        left_desc5.setFont(QFont("Segoe UI", 10))
+        left_desc5.setWordWrap(True)
+        left_layout.addWidget(left_desc5)
         
         # 添加弹性间隔
         left_layout.addStretch()
@@ -91,7 +95,7 @@ class AddGameWindow(QWidget):
         # ========== 右侧：运作扫描器 ==========
         right_widget = QFrame()
         right_layout = QVBoxLayout()
-        right_layout.setContentsMargins(20, 20, 20, 20)
+        right_layout.setContentsMargins(12, 20, 12, 20)
         right_layout.setSpacing(15)
         
         # 标题
@@ -116,7 +120,7 @@ class AddGameWindow(QWidget):
         right_layout.addWidget(right_desc2)
         
         # 说明文本 - 第三段
-        right_desc3 = QLabel("扫描器不会扫描忽略列表的游戏。\n你可以在右侧某单编辑运作的扫描器，运作的扫描器：")
+        right_desc3 = QLabel("扫描器不会扫描忽略列表的游戏。\n你可以在右侧某单编辑运作的扫描器\n运作的扫描器：")
         right_desc3.setFont(QFont("Segoe UI", 12))
         right_desc3.setWordWrap(True)
         right_layout.addWidget(right_desc3)
