@@ -1,0 +1,524 @@
+import os, sys, time, glob, json, re, shutil, threading, configparser, subprocess, urllib3
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import winreg, win32com.client, pythoncom, win32api, win32con, win32security, win32process, win32gui, psutil, vdf
+from PIL import Image, ImageDraw, ImageFont, ImageTk
+from colorthief import ColorThief
+from io import BytesIO
+import requests, webbrowser
+from icoextract import IconExtractor, IconExtractorError
+
+def get_lnk_files(include_hidden=False):
+    # 获取当前工作目录下的所有 .lnk 文件
+    lnk_files = glob.glob("*.lnk")
+    valid_lnk_files = []
+    
+    # 过滤掉指向文件夹的快捷方式和已隐藏文件
+    for lnk in lnk_files:
+        try:
+            # 检查是否在隐藏列表中（当不需要包含隐藏文件时）
+            if not include_hidden and lnk in hidden_files:
+                continue
+                
+            target_path = get_target_path_from_lnk(lnk)
+            if os.path.isdir(target_path):
+                print(f"跳过文件夹快捷方式: {lnk} -> {target_path}")
+            else:
+                valid_lnk_files.append(lnk)
+        except Exception as e:
+            print(f"无法获取 {lnk} 的目标路径: {e}")
+    
+    if include_hidden:
+        print("找到所有.lnk文件（包含已隐藏）:")
+    else:
+        print("找到的可见.lnk文件:")
+        
+    for idx, lnk in enumerate(valid_lnk_files):
+        print(f"{idx+1}. {lnk}")
+    return valid_lnk_files
+
+def get_target_path_from_lnk(lnk_file):
+    pythoncom.CoInitialize()
+    # 使用 win32com 获取快捷方式目标路径
+    shell = win32com.client.Dispatch("WScript.Shell")
+    shortcut = shell.CreateShortCut(lnk_file)
+    return shortcut.TargetPath
+
+def extract_icon(exe_path):
+    try:
+        extractor = IconExtractor(exe_path)
+        output_icon_path = "temp_icon.ico"
+        extractor.export_icon(output_icon_path, num=0)
+        return output_icon_path
+    except IconExtractorError as e:
+        print(f"提取图标失败: {e}")
+        return None
+
+def get_dominant_colors(image, num_colors=2):
+    with BytesIO() as output:
+        image.save(output, format="PNG")
+        img_bytes = output.getvalue()
+
+    color_thief = ColorThief(BytesIO(img_bytes))
+    return color_thief.get_palette(color_count=num_colors)
+
+def create_image_with_icon(exe_path, output_path ,idx):
+    global skipped_entries  # 声明使用全局变量
+    try:
+        # 检查是否为 .ico 文件
+        if exe_path.lower().endswith('.ico'):
+            icon_path = exe_path  # 直接使用 .ico 文件
+        else:
+            icon_path = extract_icon(exe_path)
+            if icon_path is None:
+                print(f"无法提取图标: {exe_path}")
+                return
+
+        with Image.open(icon_path) as icon_img:
+            # 确保图标是RGBA模式
+            if icon_img.mode != 'RGBA':
+                icon_img = icon_img.convert('RGBA')
+
+            icon_width, icon_height = icon_img.size
+            dominant_colors = get_dominant_colors(icon_img)
+            color1, color2 = dominant_colors[0], dominant_colors[1]
+
+            img = Image.new('RGBA', (600, 800), color=(255, 255, 255, 0))
+            draw = ImageDraw.Draw(img)
+
+            for y in range(800):
+                for x in range(600):
+                    ratio_x = x / 600
+                    ratio_y = y / 800
+                    ratio = (ratio_x + ratio_y) / 2
+                    r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
+                    g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
+                    b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
+                    draw.point((x, y), fill=(r, g, b, 255))
+
+            icon_x = (600 - icon_width) // 2
+            icon_y = (800 - icon_height) // 2
+            img.paste(icon_img, (icon_x, icon_y), icon_img.convert('RGBA'))
+
+            img.save(output_path, format="PNG")
+            print(f"图像已保存至 {output_path}")
+
+        try:
+            if not exe_path.lower().endswith('.ico'):
+                os.remove(icon_path)  # 仅在提取图标时删除临时文件
+            print(f"\n {exe_path}\n")
+        except PermissionError:
+            print(f"无法删除临时图标文件: {icon_path}. 稍后再试.")
+            time.sleep(1)
+            os.remove(icon_path)
+
+    except Exception as e:
+        print(f"创建图像时发生异常，跳过此文件: {exe_path}\n异常信息: {e}")
+        skipped_entries.append(idx)  # 记录异常条目
+
+
+def generate_app_entry(lnk_file, index):
+    # 跳过已记录的异常条目
+    if index in skipped_entries:
+        print(f"跳过已记录的异常条目: {lnk_file}")
+        return None  # 返回 None 以表示跳过该条目
+
+    # 判断 lnk_file 是否为 .url 文件
+    if lnk_file.lower().endswith('.url'):
+        entry = {
+            "name": os.path.splitext(lnk_file)[0],  # 使用快捷方式文件名作为名称
+            "output": "",
+            "cmd": "",
+            "exclude-global-prep-cmd": "false",
+            "elevated": "false",
+            "auto-detach": "true",
+            "wait-all": "true",
+            "exit-timeout": "5",
+            "menu-cmd": "",
+            "image-path": f"output_image{index}.png",
+            "detached": [
+                f"\"{os.path.abspath(lnk_file)}\""
+            ]
+        }
+    else:
+        # 为每个快捷方式生成对应的 app 条目
+        entry = {
+            "name": os.path.splitext(lnk_file)[0],  # 使用快捷方式文件名作为名称
+            "output": "",
+            "cmd": f"\"{os.path.abspath(lnk_file)}\"",
+            "exclude-global-prep-cmd": "false",
+            "elevated": "false",
+            "auto-detach": "true",
+            "wait-all": "true",
+            "exit-timeout": "5",
+            "menu-cmd": "",
+            "image-path": f"output_image{index}.png",
+        }
+    return entry
+
+def add_entries_to_apps_json(valid_lnk_files, apps_json, modified_target_paths,image_target_paths):
+    
+    # 为每个有效的快捷方式生成新的条目并添加到 apps 中
+    for index, lnk_file in enumerate(valid_lnk_files):
+        # 检查是否在 modified_target_paths 中标记为存在
+        if any(target_path == lnk_file and is_existing for target_path, is_existing in modified_target_paths):
+            print(f"跳过已存在的条目: {lnk_file}")
+            continue  # 跳过已有条目的处理
+        matching_image_entry = next((item for item in image_target_paths if item[0] == lnk_file), None)
+        app_entry = generate_app_entry(lnk_file, matching_image_entry[1])
+        if app_entry:  # 仅在 app_entry 不为 None时添加
+            apps_json["apps"].append(app_entry)
+            print(f"新加入: {lnk_file}")
+
+def remove_entries_with_output_image(apps_json, base_names):
+    # 删除 apps.json 中包含 "output_image" 或"_SGDB"或"_library_600x900"的条目，且 cmd 和 detached 字段不在 base_names 中
+    
+    # 先找出需要删除的条目
+    entries_to_delete = []
+    for entry in apps_json['apps']:
+        if (("output_image" in entry.get("image-path", "") or
+             "_SGDB" in entry.get("image-path", "") or
+             "_library_600x900" in entry.get("image-path", ""))
+            and not (
+                (entry.get("cmd") and os.path.basename(entry["cmd"].strip('"')) in base_names) or 
+                (entry.get("detached") and any(os.path.basename(detached_item.strip('"')) in base_names for detached_item in entry["detached"]))
+            )):
+            entries_to_delete.append(entry)
+    
+    # 如果没有需要删除的条目，直接返回
+    if not entries_to_delete:
+        return
+    
+    # 如果设置了自动删除，直接删除
+    global auto_delete_orphaned_entries
+    if auto_delete_orphaned_entries:
+        apps_json['apps'] = [
+            entry for entry in apps_json['apps'] 
+            if entry not in entries_to_delete
+        ]
+        print(f"已自动删除 {len(entries_to_delete)} 个不符合条件的条目")
+        return
+    
+    # 询问用户是否删除
+    deleted_entry_names = [entry.get("name", "未知") for entry in entries_to_delete]
+    entry_list = "\n".join([f"  - {name}" for name in deleted_entry_names[:10]])  # 最多显示10个
+    if len(deleted_entry_names) > 10:
+        entry_list += f"\n  ... 还有 {len(deleted_entry_names) - 10} 个条目"
+    
+    message = f"检测到 {len(entries_to_delete)} 个孤立的条目需要删除（对应的快捷方式已不存在）：\n\n{entry_list}\n\n是否删除这些条目？"
+    
+    # 创建自定义对话框
+    dialog_result = {"value": None}
+    
+    # 获取主窗口或创建临时窗口
+    parent_window = None
+    try:
+        # 尝试从全局命名空间获取 root
+        if 'root' in globals() and globals()['root']:
+            parent_window = globals()['root']
+    except:
+        pass
+    
+    # 如果无法获取主窗口，创建一个临时根窗口
+    temp_root = None
+    if not parent_window:
+        temp_root = tk.Tk()
+        temp_root.withdraw()
+        parent_window = temp_root
+    
+    dialog = tk.Toplevel(parent_window)
+    dialog.title("确认删除")
+    dialog.geometry("450x350")
+    dialog.attributes("-topmost", True)
+    if parent_window and parent_window != temp_root:
+        try:
+            dialog.transient(parent_window)
+        except:
+            pass
+    
+    # 居中显示
+    dialog.update_idletasks()
+    x = (dialog.winfo_screenwidth() // 2) - (450 // 2)
+    y = (dialog.winfo_screenheight() // 2) - (350 // 2)
+    dialog.geometry(f"450x350+{x}+{y}")
+    
+    tk.Label(dialog, text=message, wraplength=420, justify=tk.LEFT, padx=10, pady=10).pack()
+    
+    button_frame = tk.Frame(dialog)
+    button_frame.pack(pady=20)
+    
+    def delete_click():
+        dialog_result["value"] = "delete"
+        dialog.destroy()
+        if temp_root:
+            temp_root.destroy()
+    
+    def cancel_click():
+        dialog_result["value"] = "cancel"
+        dialog.destroy()
+        if temp_root:
+            temp_root.destroy()
+    
+    def ignore_click():
+        dialog_result["value"] = "ignore"
+        dialog.destroy()
+        if temp_root:
+            temp_root.destroy()
+    
+    tk.Button(button_frame, text="删除", command=delete_click, width=12, bg='#aaaaaa').pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="取消", command=cancel_click, width=12, bg='#aaaaaa').pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="忽略并记住", command=ignore_click, width=12, bg='#aaaaaa').pack(side=tk.LEFT, padx=5)
+    
+    dialog.protocol("WM_DELETE_WINDOW", cancel_click)
+    dialog.focus_force()
+    dialog.grab_set()  # 设置为模态对话框
+    dialog.wait_window()
+    if temp_root:
+        temp_root.update()
+    
+    # 处理用户选择
+    if dialog_result["value"] == "delete":
+        apps_json['apps'] = [
+            entry for entry in apps_json['apps'] 
+            if entry not in entries_to_delete
+        ]
+        print(f"已删除 {len(entries_to_delete)} 个不符合条件的条目")
+    elif dialog_result["value"] == "ignore":
+        # 设置自动删除标志，以后不再询问
+        auto_delete_orphaned_entries = True
+        save_config()
+        print("已设置自动删除孤立条目，以后将不再询问")
+    else:
+        # 取消删除
+        print("已取消删除操作")
+
+
+def get_url_files(include_hidden=False):
+    # 获取当前工作目录下的所有 .url 文件
+    url_files = glob.glob("*.url")
+    valid_url_files = []
+    
+    for url in url_files:
+        try:
+            # 检查是否在隐藏列表中（当不需要包含隐藏文件时）
+            if not include_hidden and url in hidden_files:
+                continue
+                
+            target_path = get_url_target_path(url)
+            valid_url_files.append((url, target_path))
+        except Exception as e:
+            print(f"无法获取 {url} 的目标路径: {e}")
+    
+    print("找到的 .url 文件:")
+    for idx, (url, target) in enumerate(valid_url_files):
+        print(f"{idx+1}. {url}")
+    return valid_url_files
+
+def get_url_target_path(url_file):
+    # 读取 .url 文件并获取目标路径
+    with open(url_file, 'r', encoding='utf-8') as f:
+        content = f.readlines()
+    
+    for line in content:
+        if line.startswith("IconFile="):
+            icon_file = line.split("=", 1)[1].strip()
+            return icon_file  # 返回图标文件路径或可执行文件路径
+    raise ValueError("未找到 IconFile 路径")
+
+def restart_service():
+    """
+    发送POST请求以重启服务
+    """
+    try:
+        response = requests.post('https://localhost:47990/api/restart', verify=False)
+        if response.status_code == 200:
+            print("sunshine服务重启")
+        else:
+            print(f"sunshine服务重启")
+    except requests.exceptions.RequestException as e:
+        print(f"sunshine服务已重启")
+
+def find_unused_index(apps_json, image_target_paths):
+    existing_indices = {int(entry["image-path"].split("output_image")[-1].split(".png")[0]) for entry in apps_json['apps'] if "output_image" in entry.get("image-path", "")}
+    existing_indices = existing_indices.union({ima[1] for ima in image_target_paths})  # 使用 union 合并集合
+    index = 0
+    while index in existing_indices:
+        index += 1
+    return index
+
+def main():
+    global folder_selected, onestart, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
+    # 获取当前目录下所有有效的 .lnk 和 .url 文件
+    os.chdir(folder_selected)  # 设置为用户选择的目录
+    lnk_files = get_lnk_files()
+    url_files = get_url_files()
+    
+    target_paths = [get_target_path_from_lnk(lnk) for lnk in lnk_files]
+    target_paths += [url[1] for url in url_files]  # 添加 .url 文件的目标路径
+    lnkandurl_files = lnk_files + [url[0] for url in url_files]
+
+    # 确保目标文件夹存在
+    output_folder = f"{APP_INSTALL_PATH}\\config\\covers"  # 更改为适当的文件夹
+
+    # 加载现有的 apps.json 文件
+    apps_json_path = f"{APP_INSTALL_PATH}\\config\\apps.json"  # 修改为你的 apps.json 文件路径
+    print(f"该应用会使用《{output_folder}》文件夹来存放输出的图像\n修改以下文件《{apps_json_path}》来添加sunshine应用程序")
+    if onestart:
+        onestart = False
+        return
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    apps_json = load_apps_json(apps_json_path)
+
+    # 检查 target_paths 是否与 apps.json 中的条目名称相同
+    # 处理 cmd 字段
+    existing_names1 = set()
+    for entry in apps_json.get('apps', []):
+        cmd = entry.get('cmd')
+        if isinstance(cmd, str):
+            cmd_str = cmd.strip('"')
+            if cmd_str:
+                existing_names1.add(os.path.splitext(os.path.basename(cmd_str))[0])
+        elif isinstance(cmd, (list, tuple)) and cmd:
+            # 取列表中第一个合理的字符串元素
+            for item in cmd:
+                if isinstance(item, str) and item:
+                    item_str = item.strip('"')
+                    existing_names1.add(os.path.splitext(os.path.basename(item_str))[0])
+                    break
+        # 其他类型（如 None 或 dict）直接跳过
+
+    # 处理 detached 字段，注意 detached 通常为列表
+    existing_names2 = set()
+    for entry in apps_json.get('apps', []):
+        detached_list = entry.get('detached')
+        if isinstance(detached_list, (list, tuple)):
+            for detached_item in detached_list:
+                if isinstance(detached_item, str) and detached_item:
+                    di = detached_item.strip('"')
+                    existing_names2.add(os.path.splitext(os.path.basename(di))[0])
+    modified_target_paths = []  # 确保在这里初始化
+
+    for idx, target_path in enumerate(target_paths):
+        name = lnkandurl_files[idx]  # 获取文件名作为名称
+        base_name = name.rsplit('.', 1)[0]
+        # 修正条件判断，确保正确识别 .lnk 和 .url 文件
+        if base_name in existing_names1 or base_name in existing_names2:
+            modified_target_paths.append((target_path, True))  # 添加特殊标识符
+        else:
+            modified_target_paths.append((target_path, False))  # 不存在则标记为 False
+
+    # 删除不存在的条目
+    remove_entries_with_output_image(apps_json, lnkandurl_files)
+    image_target_paths = []
+    need_choose_cover_names = []
+    print("--------------------生成封面--------------------")
+    # 创建并处理图像
+    for idx, (target_path, is_existing) in enumerate(modified_target_paths):
+        if is_existing:
+            print(f"跳过已存在的条目: {target_path}")
+            continue  # 跳过已有条目的处理
+        app_name = os.path.splitext(os.path.basename(lnkandurl_files[idx]))[0]
+        exe_path = target_path
+        output_dir = output_folder
+        # ========== 优先为steam游戏设置封面 ==========
+        output_index = find_unused_index(apps_json, image_target_paths)  # 获取未使用的索引
+        cover_path = try_set_steam_cover_for_shortcut(app_name, lnkandurl_files[idx], output_dir, output_index)
+        if cover_path:
+            image_target_paths.append((lnkandurl_files[idx], output_index))
+            print(f"已为Steam游戏 {app_name} 设置本地封面: {cover_path}")
+        else:
+            image_target_paths.append((lnkandurl_files[idx], output_index))
+            output_path = os.path.join(output_folder, f"output_image{output_index}.png")
+            create_image_with_icon(target_path, output_path, idx)
+            print(f"已生成封面: {app_name}")
+            need_choose_cover_names.append(app_name)  # 记录需要选择封面的app_name
+    # 转换 modified_target_paths
+    modified_target_paths1 = modified_target_paths
+    modified_target_paths = []
+    for idx, (target_path, is_existing) in enumerate(modified_target_paths1):
+        modified_target_paths.append((lnkandurl_files[idx], is_existing))
+    
+    print("--------------------更新配置--------------------")
+    # 添加新的快捷方式条目
+    add_entries_to_apps_json(lnk_files, apps_json, modified_target_paths, image_target_paths)
+
+    # 处理 .url 文件的条目
+    for index, (url_file, target_path) in enumerate(url_files, start=len(lnk_files)):
+        if any(target_path == url_file and is_existing for target_path, is_existing in modified_target_paths):
+            print(f"跳过已存在的条目: {url_file}")
+            continue  # 跳过已有条目的处理
+        matching_image_entry = next((item for item in image_target_paths if item[0] == url_file), None)
+        app_entry = generate_app_entry(url_file, matching_image_entry[1])
+        if app_entry:  # 仅在 app_entry 不为 None 时添加
+            apps_json["apps"].append(app_entry)
+            print(f"新加入: {url_file}")
+
+    # 如果启用了伪排序，更新条目的名称
+    if pseudo_sorting_enabled:
+        for idx, entry in enumerate(apps_json["apps"]):
+            # 去掉之前的序号
+            entry["name"] = re.sub(r'^\d{2} ', '', entry["name"])  # 去掉开头的两位数字和空格
+            entry["name"] = f"{idx:02d} {entry['name']}"  # 在名称前加上排序数字，格式化为两位数
+        print("已添加伪排序标志")
+
+    # 保存更新后的 apps.json 文件
+    save_apps_json(apps_json, apps_json_path)
+    restart_service()
+    # 新增：统一调用-choosecover进行选择，并传递剩余游戏数量
+    if need_choose_cover_names:
+        exe_path = sys.executable if getattr(sys, 'frozen', False) else sys.argv[0]
+        total_games = len(need_choose_cover_names)
+        for i, name in enumerate(need_choose_cover_names):
+            remaining_games = total_games - i
+            try:
+                cmd = [exe_path, "-choosecover", name, str(remaining_games)]
+                process = subprocess.Popen(cmd)
+                process.wait()  # 等待子进程完成
+            except Exception as e:
+                print(f"调用SGDB封面选择失败: {e}")
+    if close_after_completion:
+        os._exit(0)  # 正常退出
+
+# ========== 新增：为steam游戏快捷方式优先设置封面 ==========
+def try_set_steam_cover_for_shortcut(app_name, target_path, output_dir, index):
+    """
+    检查 target_path 是否为 steam 游戏快捷方式，若是则尝试用本地 steam 封面，成功返回图片路径，否则返回 None。
+    """
+    import re
+    steamid = None
+    # 检查.lnk/.url文件内容是否包含 steam://rungameid/ 并提取id
+    try:
+        if target_path.lower().endswith('.url'):
+            with open(target_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.startswith("URL=") and "steam://rungameid/" in line:
+                        m = re.search(r'steam://rungameid/(\d+)', line)
+                        if m:
+                            steamid = m.group(1)
+                            break
+    except Exception as e:
+        print(f"检查steam快捷方式失败: {e}")
+        return None
+    if not steamid:
+        return None
+    # 查找本地steam封面
+    steam_base_dir = get_steam_base_dir()
+    if not steam_base_dir:
+        return None
+    image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900.jpg"
+    if not os.path.exists(image_path):
+        image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900_schinese.jpg"
+        if not os.path.exists(image_path):
+            return None
+    # 拷贝图片到 output_dir，文件名采用统一索引方式
+    import shutil
+    output_path = os.path.join(output_dir, f"output_image{index}.png")
+    try:
+        shutil.copy(image_path, output_path)
+        print(f"已为Steam游戏 {app_name} 设置本地封面: {output_path}")
+        return output_path
+    except Exception as e:
+        print(f"拷贝Steam封面失败: {e}")
+        return None
