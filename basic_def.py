@@ -8,6 +8,129 @@ from io import BytesIO
 import requests, webbrowser
 from icoextract import IconExtractor, IconExtractorError
 
+config = configparser.ConfigParser()
+if getattr(sys, 'frozen', False):
+    # 如果是打包后的应用程序
+    config_file_path = os.path.join(os.path.dirname(sys.executable), 'config.ini')  # 存储在可执行文件同级目录
+else:
+    # 如果是开发环境
+    config_file_path = 'config.ini'
+hidden_files = []
+skipped_entries = []
+folder_selected = ''
+close_after_completion = True  # 默认开启
+pseudo_sorting_enabled = False  # 新增伪排序适应选项，默认关闭
+auto_delete_orphaned_entries = False  # 自动删除孤立条目（不再询问），默认关闭
+
+def get_app_install_path():
+    app_name = "sunshine"
+    try:
+        # 打开注册表键，定位到安装路径信息
+        registry_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
+                                      r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")
+        # 遍历注册表中的子项，查找对应应用名称
+        for i in range(winreg.QueryInfoKey(registry_key)[0]):
+            subkey_name = winreg.EnumKey(registry_key, i)
+            subkey = winreg.OpenKey(registry_key, subkey_name)
+            try:
+                display_name, _ = winreg.QueryValueEx(subkey, "DisplayName")
+                if app_name.lower() in display_name.lower():
+                    install_location, _ = winreg.QueryValueEx(subkey, "DisplayIcon")
+                    if os.path.exists(install_location):
+                        return os.path.dirname(install_location)
+            except FileNotFoundError:
+                continue
+    except Exception as e:
+        print(f"Error: {e}")
+    print(f"未检测到安装目录！")
+    return os.path.dirname(sys.executable)
+APP_INSTALL_PATH=get_app_install_path()
+
+def load_apps_json(json_path):
+    # 加载已有的 apps.json
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            # 如果普通 utf-8 读取失败，尝试用带 BOM 的 utf-8-sig 读取并回写为纯 utf-8
+            try:
+                with open(json_path, "r", encoding="utf-8-sig") as f:
+                    data = json.load(f)
+                try:
+                    with open(json_path, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=4, ensure_ascii=False)
+                except Exception as e2:
+                    print(f"保存为 utf-8 失败: {e2}")
+                return data
+            except Exception as e2:
+                print(f"读取 apps.json 失败: {e} / {e2}")
+                # 使用 Win32 API弹窗提示
+                try:
+                    msg = f"读取 apps.json 失败：\n{e}\n{e2}\n。"
+                    print("读取错误",msg)
+                    sys.exit(1)
+                except Exception:
+                    pass
+    else:
+        # 如果文件不存在，返回一个空的基础结构
+        return {"env": "", "apps": []}
+    
+def save_apps_json(apps_json, file_path):
+    # 将更新后的 apps.json 保存到文件
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(apps_json, f, ensure_ascii=False, indent=4)
+def load_config():
+    """加载配置文件"""
+    global close_after_completion, pseudo_sorting_enabled, hidden_files ,folder, steam_excluded_games, auto_delete_orphaned_entries
+    config.read(config_file_path)
+    folder = config.get('Settings', 'folder_selected', fallback='')
+    hidden_files_str = config.get('Settings', 'hidden_files', fallback='')  # 获取隐藏的文件路径字符串
+    hidden_files = hidden_files_str.split(',') if hidden_files_str else []  # 将字符串转换为列表
+    close_after_completion = config.getboolean('Settings', 'close_after_completion', fallback=True)  # 获取关闭选项
+    pseudo_sorting_enabled = config.getboolean('Settings', 'pseudo_sorting_enabled', fallback=False)  # 获取伪排序选项
+    # 新增 steam_excluded_games
+    steam_excluded_games_str = config.get('Settings', 'steam_excluded_games', fallback='')
+    steam_excluded_games = steam_excluded_games_str.split(',') if steam_excluded_games_str else []
+    # 新增 auto_delete_orphaned_entries
+    auto_delete_orphaned_entries = config.getboolean('Settings', 'auto_delete_orphaned_entries', fallback=False)
+    if os.path.exists(config_file_path)==False:
+        save_config()  #没有配置文件保存下
+    # 检查 folder 是否有效
+    if not os.path.isdir(folder):
+        
+        # 弹窗提示
+        messagebox.showinfo(
+            "首次启动QSAA - 关于工作路径",
+            "这似乎是你第一次启动QSAA，请了解工作路径是什么\n\n该程序会扫描工作路径的快捷方式，加入到Sunshine中\n程序默认工作路径为：程序同级路径\\appfolder\n游戏添加方法：快速添加按钮/主页添加steam游戏/手动拖入文件夹\n工作目录可在主页中修改\ntip：若选择桌面目录，主页的排除功能是很有用的（排除非游戏快捷方式）",
+            icon="question"
+        )
+        folder = os.path.realpath(os.path.join(os.path.dirname(sys.executable), "appfolder")).replace("\\", "/")
+        if not os.path.exists(folder):
+            os.makedirs(folder)  # 创建目录
+        #folder = os.path.realpath(os.path.join(os.path.expanduser("~"), "Desktop")).replace("\\", "/") + "\n\n选择"是"使用程序目录，选择"否"使用桌面目录（之后可随时修改）"
+        save_config()
+    return folder
+
+def save_config():
+    """保存选择的目录到配置文件"""
+    try:
+        global hidden_files, folder, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries  # 添加全局变量声明
+        config['Settings'] = {
+            'folder_selected': folder,
+            'close_after_completion': close_after_completion,
+            'pseudo_sorting_enabled': pseudo_sorting_enabled,
+            # 将 hidden_files 列表转换为逗号分隔的字符串
+            'hidden_files': ','.join(hidden_files) if hidden_files else '',
+            # 新增 steam_excluded_games
+            'steam_excluded_games': ','.join(steam_excluded_games) if steam_excluded_games else '',
+            # 新增 auto_delete_orphaned_entries
+            'auto_delete_orphaned_entries': auto_delete_orphaned_entries
+        }
+        with open(config_file_path, 'w') as configfile:
+            config.write(configfile)
+    except Exception as e:
+        print(f"保存配置文件时出错: {e}")
 def get_lnk_files(include_hidden=False):
     # 获取当前工作目录下的所有 .lnk 文件
     lnk_files = glob.glob("*.lnk")
@@ -480,7 +603,36 @@ def main():
                 print(f"调用SGDB封面选择失败: {e}")
     if close_after_completion:
         os._exit(0)  # 正常退出
-
+def get_steam_base_dir():
+    """
+    获取Steam的安装目录
+    返回: str - Steam安装路径，如果未找到则返回None
+    """
+    try:
+        # 打开Steam的注册表键
+        hkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
+        
+        # 获取SteamPath值
+        steam_path = winreg.QueryValueEx(hkey, "SteamPath")[0]
+        winreg.CloseKey(hkey)
+        
+        # 确保路径存在
+        if os.path.exists(steam_path):
+            return steam_path
+            
+    except WindowsError:
+        return None
+        
+    return None
+def generate_steamapp(app_id):
+    # 检查图片文件是否存在
+    steam_base_dir = get_steam_base_dir()
+    image_path = f"{steam_base_dir}/appcache/librarycache/{app_id}_library_600x900.jpg"
+    if not os.path.exists(image_path):
+        image_path = f"{steam_base_dir}/appcache/librarycache/{app_id}_library_600x900_schinese.jpg"
+        if not os.path.exists(image_path):
+            return None  # 如果图片文件不存在，则返回None
+    return image_path
 # ========== 新增：为steam游戏快捷方式优先设置封面 ==========
 def try_set_steam_cover_for_shortcut(app_name, target_path, output_dir, index):
     """

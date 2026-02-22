@@ -5,69 +5,10 @@ import re, winreg
 import uuid
 from functools import partial
 from PyQt5 import QtWidgets, QtGui, QtCore
+from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json
 
 THUMB_SIZE = (80, 120)
 IMAGE_CACHE = {}
-
-
-def get_app_install_path():
-    app_name = "sunshine"
-    try:
-        # 打开注册表键，定位到安装路径信息
-        registry_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
-                                      r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")
-        # 遍历注册表中的子项，查找对应应用名称
-        for i in range(winreg.QueryInfoKey(registry_key)[0]):
-            subkey_name = winreg.EnumKey(registry_key, i)
-            subkey = winreg.OpenKey(registry_key, subkey_name)
-            try:
-                display_name, _ = winreg.QueryValueEx(subkey, "DisplayName")
-                if app_name.lower() in display_name.lower():
-                    install_location, _ = winreg.QueryValueEx(subkey, "DisplayIcon")
-                    if os.path.exists(install_location):
-                        return os.path.dirname(install_location)
-            except FileNotFoundError:
-                continue
-    except Exception as e:
-        print(f"Error: {e}")
-    print(f"未检测到安装目录！")
-    return os.path.dirname(sys.executable)
-APP_INSTALL_PATH=get_app_install_path()
-
-def load_apps_json(json_path):
-    # 加载已有的 apps.json
-    if os.path.exists(json_path):
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            # 如果普通 utf-8 读取失败，尝试用带 BOM 的 utf-8-sig 读取并回写为纯 utf-8
-            try:
-                with open(json_path, "r", encoding="utf-8-sig") as f:
-                    data = json.load(f)
-                try:
-                    with open(json_path, "w", encoding="utf-8") as f:
-                        json.dump(data, f, indent=4, ensure_ascii=False)
-                except Exception as e2:
-                    print(f"保存为 utf-8 失败: {e2}")
-                return data
-            except Exception as e2:
-                print(f"读取 apps.json 失败: {e} / {e2}")
-                # 使用 Win32 API弹窗提示
-                try:
-                    msg = f"读取 apps.json 失败：\n{e}\n{e2}\n。"
-                    print("读取错误",msg)
-                    sys.exit(1)
-                except Exception:
-                    pass
-    else:
-        # 如果文件不存在，返回一个空的基础结构
-        return {"env": "", "apps": []}
-    
-def save_apps_json(apps_json, file_path):
-    # 将更新后的 apps.json 保存到文件
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(apps_json, f, ensure_ascii=False, indent=4)
 
 def get_thumb(path):
     if not path:
