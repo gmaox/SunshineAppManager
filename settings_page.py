@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
+import os
+import basic_def
 
 
 class SettingsPage(QWidget):
@@ -14,6 +16,11 @@ class SettingsPage(QWidget):
     
     def init_ui(self):
         """初始化设置页面UI"""
+        # 从 basic_def 读取配置
+        try:
+            basic_def.load_config()
+        except Exception:
+            pass
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -44,16 +51,16 @@ class SettingsPage(QWidget):
         enable_notify_layout = QHBoxLayout()
         enable_notify_label = QLabel("完成后关闭程序：")
         enable_notify_label.setFont(QFont("Segoe UI", 12))
-        enable_notify_checkbox = QCheckBox()
-        enable_notify_checkbox.setChecked(True)
+        self.enable_notify_checkbox = QCheckBox()
+        self.enable_notify_checkbox.setChecked(basic_def.close_after_completion)
         # 现代开关样式（视觉为滑动开关）
-        enable_notify_checkbox.setStyleSheet(
+        self.enable_notify_checkbox.setStyleSheet(
             "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
             "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
             "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
         )
         enable_notify_layout.addWidget(enable_notify_label)
-        enable_notify_layout.addWidget(enable_notify_checkbox)
+        enable_notify_layout.addWidget(self.enable_notify_checkbox)
         enable_notify_layout.addStretch()
         settings_layout.addLayout(enable_notify_layout)
         
@@ -61,15 +68,15 @@ class SettingsPage(QWidget):
         auto_save_layout = QHBoxLayout()
         auto_save_label = QLabel("启用伪排序：")
         auto_save_label.setFont(QFont("Segoe UI", 12))
-        auto_save_checkbox = QCheckBox()
-        auto_save_checkbox.setChecked(False)
-        auto_save_checkbox.setStyleSheet(
+        self.auto_save_checkbox = QCheckBox()
+        self.auto_save_checkbox.setChecked(basic_def.pseudo_sorting_enabled)
+        self.auto_save_checkbox.setStyleSheet(
             "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
             "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
             "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
         )
         auto_save_layout.addWidget(auto_save_label)
-        auto_save_layout.addWidget(auto_save_checkbox)
+        auto_save_layout.addWidget(self.auto_save_checkbox)
         auto_save_layout.addStretch()
         settings_layout.addLayout(auto_save_layout)
         
@@ -77,10 +84,17 @@ class SettingsPage(QWidget):
         work_path_layout = QHBoxLayout()
         work_path_label = QLabel("工作路径：")
         work_path_label.setFont(QFont("Segoe UI", 12))
-        work_path_input = QLineEdit()
-        work_path_input.setPlaceholderText("选择工作路径...")
-        work_path_input.setReadOnly(True)
-        work_path_input.setStyleSheet("QLineEdit { border: none; background-color: #ffffff; padding:6px; }")
+        self.work_path_input = QLineEdit()
+        self.work_path_input.setPlaceholderText("选择工作路径...")
+        self.work_path_input.setReadOnly(True)
+        self.work_path_input.setStyleSheet("QLineEdit { border: none; background-color: #ffffff; padding:6px; }")
+        # 显示当前配置中的工作路径
+        try:
+            if getattr(basic_def, 'folder', None):
+                self.work_path_input.setText(os.path.normpath(basic_def.folder))
+        except Exception:
+            pass
+
         work_path_btn = QPushButton("浏览")
         work_path_btn.setFixedWidth(100)
         work_path_btn.setFixedHeight(34)
@@ -89,7 +103,7 @@ class SettingsPage(QWidget):
             "QPushButton:hover{ background-color:#256070;}"
         )
         work_path_layout.addWidget(work_path_label)
-        work_path_layout.addWidget(work_path_input)
+        work_path_layout.addWidget(self.work_path_input)
         work_path_layout.addWidget(work_path_btn)
         settings_layout.addLayout(work_path_layout)
         
@@ -97,20 +111,18 @@ class SettingsPage(QWidget):
         config_path_layout = QHBoxLayout()
         config_path_label = QLabel("配置文件：")
         config_path_label.setFont(QFont("Segoe UI", 12))
-        config_path_input = QLineEdit()
-        config_path_input.setPlaceholderText("选择配置文件...")
-        config_path_input.setReadOnly(True)
-        config_path_input.setStyleSheet("QLineEdit { border: none; color: #666666; background-color: #f5f5f5; padding:6px; }")
-        config_path_btn = QPushButton("浏览")
-        config_path_btn.setFixedWidth(100)
-        config_path_btn.setFixedHeight(34)
-        config_path_btn.setStyleSheet(
-            "QPushButton{ background-color:#2E7D9B; color:white; border:none; border-radius:6px; padding:6px 12px;}"
-            "QPushButton:hover{ background-color:#256070;}"
-        )
+        self.config_path_input = QLineEdit()
+        self.config_path_input.setPlaceholderText("选择配置文件...")
+        self.config_path_input.setReadOnly(True)
+        self.config_path_input.setStyleSheet("QLineEdit { border: none; color: #666666; background-color: #f5f5f5; padding:6px; }")
+        # 显示当前 config.ini 路径
+        try:
+            self.config_path_input.setText(os.path.join(basic_def.APP_INSTALL_PATH, 'config', 'apps.json'))
+        except Exception:
+            pass
+
         config_path_layout.addWidget(config_path_label)
-        config_path_layout.addWidget(config_path_input)
-        config_path_layout.addWidget(config_path_btn)
+        config_path_layout.addWidget(self.config_path_input)
         settings_layout.addLayout(config_path_layout)
         
         # 5. 下拉列表（语言）
@@ -197,3 +209,47 @@ class SettingsPage(QWidget):
         main_layout.addWidget(scroll_area)
         
         self.setLayout(main_layout)
+
+        # 连接信号并初始化状态
+        self.work_path_btn = work_path_btn
+        self.init_signals()
+
+    def init_signals(self):
+        try:
+            self.enable_notify_checkbox.stateChanged.connect(self.on_close_after_changed)
+        except Exception:
+            pass
+        try:
+            self.auto_save_checkbox.stateChanged.connect(self.on_pseudo_sorting_changed)
+        except Exception:
+            pass
+        try:
+            self.work_path_btn.clicked.connect(self.on_browse_work_path)
+        except Exception:
+            pass
+    def on_close_after_changed(self, state):
+        # state: 0 or 2
+        try:
+            basic_def.close_after_completion = bool(state)
+            basic_def.save_config()
+        except Exception as e:
+            print(f"保存 close_after_completion 失败: {e}")
+
+    def on_pseudo_sorting_changed(self, state):
+        try:
+            basic_def.pseudo_sorting_enabled = bool(state)
+            basic_def.save_config()
+        except Exception as e:
+            print(f"保存 pseudo_sorting_enabled 失败: {e}")
+
+    def on_browse_work_path(self):
+        try:
+            dirname = QFileDialog.getExistingDirectory(self, "选择工作路径", basic_def.folder or os.path.expanduser("~"))
+            if dirname:
+                dirname = dirname.replace('\\', '/')
+                self.work_path_input.setText(dirname)
+                basic_def.folder = dirname
+                basic_def.save_config()
+        except Exception as e:
+            print(f"选择工作路径失败: {e}")
+

@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QStackedWidget, QPushButton, QButtonGroup, QSizePolicy,
     QTextEdit
 )
-
+from basic_def import initialize, load_config
 # 嵌入管理界面 (确保 manage_games_pyqt.py 与本文件位于同一目录)
 try:
     from manage_games import ManageWindow
@@ -35,24 +35,41 @@ class LogSignalEmitter(QObject):
 
 # 输出重定向器
 class StreamRedirector:
-    def __init__(self, log_emitter, is_error=False):
+    def __init__(self, log_emitter, is_error=False, fallback=None):
         self.log_emitter = log_emitter
         self.is_error = is_error
         self.buffer = ""
+        # 回退到原始标准流，确保未丢失 traceback 输出
+        self.fallback = fallback if fallback is not None else (sys.__stderr__ if is_error else sys.__stdout__)
 
     def write(self, text):
-        if text:
-            self.buffer += text
-            # 每行发送一次信号
-            while '\n' in self.buffer:
-                line, self.buffer = self.buffer.split('\n', 1)
-                if line or self.is_error:
-                    self.log_emitter.log_signal.emit(line, self.is_error)
+        if not text:
+            return
+        # 同时写回原始流，便于在终端看到完整的 traceback
+        try:
+            self.fallback.write(text)
+            try:
+                self.fallback.flush()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        self.buffer += text
+        # 每行发送一次信号
+        while '\n' in self.buffer:
+            line, self.buffer = self.buffer.split('\n', 1)
+            if line or self.is_error:
+                self.log_emitter.log_signal.emit(line, self.is_error)
 
     def flush(self):
         if self.buffer:
             self.log_emitter.log_signal.emit(self.buffer, self.is_error)
             self.buffer = ""
+        try:
+            self.fallback.flush()
+        except Exception:
+            pass
 
 
 # 日志标签页
@@ -385,6 +402,6 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-    print("初始化完成")
     window.show()
+    initialize()
     sys.exit(app.exec_())

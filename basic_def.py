@@ -9,12 +9,13 @@ import requests, webbrowser
 from icoextract import IconExtractor, IconExtractorError
 
 config = configparser.ConfigParser()
+# 始终使用与代码文件同级的绝对路径，避免相对工作目录导致的读写不一致
 if getattr(sys, 'frozen', False):
-    # 如果是打包后的应用程序
-    config_file_path = os.path.join(os.path.dirname(sys.executable), 'config.ini')  # 存储在可执行文件同级目录
+    # 打包后的可执行文件：使用可执行文件所在目录
+    config_file_path = os.path.join(os.path.dirname(sys.executable), 'config.ini')
 else:
-    # 如果是开发环境
-    config_file_path = 'config.ini'
+    # 开发环境：使用当前模块文件所在目录下的 config.ini（绝对路径）
+    config_file_path = os.path.join(os.path.dirname(__file__), 'config.ini')
 hidden_files = []
 skipped_entries = []
 folder_selected = ''
@@ -81,10 +82,29 @@ def save_apps_json(apps_json, file_path):
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(apps_json, f, ensure_ascii=False, indent=4)
 def load_config():
-    """加载配置文件"""
-    global close_after_completion, pseudo_sorting_enabled, hidden_files ,folder, steam_excluded_games, auto_delete_orphaned_entries
-    config.read(config_file_path)
+    """加载配置文件并同步 `folder_selected` 变量"""
+    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries
+    # 优先使用 UTF-8 打开配置文件以避免系统默认编码（如 GBK）导致的 UnicodeDecodeError。
+    # 如果文件不存在则跳过，后续会调用 save_config() 创建默认文件。
+    if os.path.exists(config_file_path):
+        try:
+            with open(config_file_path, 'r', encoding='utf-8') as f:
+                config.read_file(f)
+        except UnicodeDecodeError:
+            try:
+                # 尝试带 BOM 的 utf-8-sig
+                with open(config_file_path, 'r', encoding='utf-8-sig') as f:
+                    config.read_file(f)
+            except Exception:
+                # 回退到系统默认编码（例如 GBK/CP936），但使用 errors='replace' 避免抛出异常
+                with open(config_file_path, 'r', encoding='cp936', errors='replace') as f:
+                    config.read_file(f)
+    else:
+        # 文件不存在，保持 config 为空，后续 save_config() 会创建它
+        pass
     folder = config.get('Settings', 'folder_selected', fallback='')
+    # 同步到运行时使用的变量名
+    folder_selected = folder
     hidden_files_str = config.get('Settings', 'hidden_files', fallback='')  # 获取隐藏的文件路径字符串
     hidden_files = hidden_files_str.split(',') if hidden_files_str else []  # 将字符串转换为列表
     close_after_completion = config.getboolean('Settings', 'close_after_completion', fallback=True)  # 获取关闭选项
@@ -106,6 +126,8 @@ def load_config():
             icon="question"
         )
         folder = os.path.realpath(os.path.join(os.path.dirname(sys.executable), "appfolder")).replace("\\", "/")
+        # 同步两个变量，确保后续代码使用的 `folder_selected` 有值
+        folder_selected = folder
         if not os.path.exists(folder):
             os.makedirs(folder)  # 创建目录
         #folder = os.path.realpath(os.path.join(os.path.expanduser("~"), "Desktop")).replace("\\", "/") + "\n\n选择"是"使用程序目录，选择"否"使用桌面目录（之后可随时修改）"
@@ -115,19 +137,24 @@ def load_config():
 def save_config():
     """保存选择的目录到配置文件"""
     try:
-        global hidden_files, folder, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries  # 添加全局变量声明
+        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries  # 添加全局变量声明
+        # 优先使用运行时的 `folder_selected`，保持一致性
+        if folder_selected:
+            folder = folder_selected
         config['Settings'] = {
             'folder_selected': folder,
-            'close_after_completion': close_after_completion,
-            'pseudo_sorting_enabled': pseudo_sorting_enabled,
+            # 确保以字符串形式写入配置文件，避免 configparser 在不同环境下解析不一致
+            'close_after_completion': str(close_after_completion),
+            'pseudo_sorting_enabled': str(pseudo_sorting_enabled),
             # 将 hidden_files 列表转换为逗号分隔的字符串
             'hidden_files': ','.join(hidden_files) if hidden_files else '',
             # 新增 steam_excluded_games
             'steam_excluded_games': ','.join(steam_excluded_games) if steam_excluded_games else '',
             # 新增 auto_delete_orphaned_entries
-            'auto_delete_orphaned_entries': auto_delete_orphaned_entries
+            'auto_delete_orphaned_entries': str(auto_delete_orphaned_entries)
         }
-        with open(config_file_path, 'w') as configfile:
+        # 显式使用 UTF-8 编码写入，确保跨平台和 BOM 行为一致
+        with open(config_file_path, 'w', encoding='utf-8') as configfile:
             config.write(configfile)
     except Exception as e:
         print(f"保存配置文件时出错: {e}")
@@ -469,10 +496,23 @@ def find_unused_index(apps_json, image_target_paths):
         index += 1
     return index
 
-def main():
-    global folder_selected, onestart, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
+def initialize():
+    global folder_selected, lnkandurl_files, output_folder, apps_json_path, target_paths, lnk_files, url_files
+    # 确保 folder_selected 已设置，避免 os.chdir('') 导致 OSError
+    load_config()
+
+    if not folder_selected:
+        # 回退到默认的 appfolder（与 load_config 中的逻辑一致）
+        folder_selected = os.path.realpath(os.path.join(os.path.dirname(sys.executable), "appfolder")).replace("\\", "/")
+        print(f"工作目录 '{folder_selected}'")
+        os.makedirs(folder_selected)
+
     # 获取当前目录下所有有效的 .lnk 和 .url 文件
-    os.chdir(folder_selected)  # 设置为用户选择的目录
+    try:
+        os.chdir(folder_selected)  # 设置为用户选择的目录
+    except Exception as e:
+        print(f"无法切换到工作目录 '{folder_selected}'：{e}")
+        return
     lnk_files = get_lnk_files()
     url_files = get_url_files()
     
@@ -486,9 +526,10 @@ def main():
     # 加载现有的 apps.json 文件
     apps_json_path = f"{APP_INSTALL_PATH}\\config\\apps.json"  # 修改为你的 apps.json 文件路径
     print(f"该应用会使用《{output_folder}》文件夹来存放输出的图像\n修改以下文件《{apps_json_path}》来添加sunshine应用程序")
-    if onestart:
-        onestart = False
-        return
+
+def main():
+    global folder_selected, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
+    initialize()
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
