@@ -527,7 +527,7 @@ def initialize():
     apps_json_path = f"{APP_INSTALL_PATH}\\config\\apps.json"  # 修改为你的 apps.json 文件路径
     print(f"该应用会使用《{output_folder}》文件夹来存放输出的图像\n修改以下文件《{apps_json_path}》来添加sunshine应用程序")
 
-def main():
+def runtomain():
     global folder_selected, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
     initialize()
     if not os.path.exists(output_folder):

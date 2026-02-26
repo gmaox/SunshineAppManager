@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
+from basic_def import runtomain
 
 
 class AddGameWindow(QWidget):
@@ -91,6 +92,8 @@ class AddGameWindow(QWidget):
         
         left_widget.setLayout(left_layout)
         left_widget.setStyleSheet("QFrame { border-right: 1px solid #e0e0e0; }")
+        # 连接按钮至方法
+        run_btn.clicked.connect(runtomain)
         
         # ========== 右侧：运作扫描器 ==========
         right_widget = QFrame()
