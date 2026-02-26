@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QStackedWidget, QPushButton, QButtonGroup, QSizePolicy,
     QTextEdit
 )
-from basic_def import initialize, load_config
+from basic_def import initialize, load_config, _process_confirm_add_entries
 # 嵌入管理界面 (确保 manage_games_pyqt.py 与本文件位于同一目录)
 try:
     from manage_games import ManageWindow
@@ -26,6 +26,18 @@ try:
     from settings_page import SettingsPage
 except Exception:
     SettingsPage = None
+
+# 嵌入确认添加窗口
+try:
+    from confirm_add_window import ConfirmAddWindow
+except Exception:
+    ConfirmAddWindow = None
+
+# 嵌入 runtomain
+try:
+    from basic_def import runtomain
+except Exception:
+    runtomain = None
 
 
 # 日志信号发射器
@@ -322,10 +334,13 @@ class MainWindow(QMainWindow):
         button_group.setExclusive(True)
 
         # 右侧页面区 (堆栈)
-        stacked = QStackedWidget()
+        self.stacked = QStackedWidget()
         # 去掉堆栈自身的内容边距
-        stacked.setContentsMargins(0, 0, 0, 0)
+        self.stacked.setContentsMargins(0, 0, 0, 0)
 
+        self.confirm_add_window = None  # 确认添加窗口引用
+        self.confirm_add_page_index = None  # 确认添加窗口页面索引
+        
         for i, name in enumerate(tab_names):
             # 页面
             page = QWidget()
@@ -365,7 +380,7 @@ class MainWindow(QMainWindow):
                 v.addStretch()
             
             page.setLayout(v)
-            stacked.addWidget(page)
+            self.stacked.addWidget(page)
 
             # 按钮
             btn = QPushButton(name)
@@ -389,19 +404,74 @@ class MainWindow(QMainWindow):
 
         # 按钮切换处理
         def on_button_clicked(id_):
-            stacked.setCurrentIndex(id_)
+            self.stacked.setCurrentIndex(id_)
 
         button_group.idClicked.connect(on_button_clicked)
 
         main_layout.addWidget(sidebar)
-        main_layout.addWidget(stacked)
+        main_layout.addWidget(self.stacked)
 
         self.setCentralWidget(main_widget)
+    
+    def show_confirm_add_window(self, pending_entries, apps_json, apps_json_path, output_folder,
+                                pseudo_sorting_enabled=False, close_after_completion=True):
+        """显示确认添加窗口"""
+        if ConfirmAddWindow is None:
+            return
+        
+        # 如果之前的窗口存在，删除它
+        if self.confirm_add_window is not None and self.confirm_add_page_index is not None:
+            widget = self.stacked.widget(self.confirm_add_page_index)
+            self.stacked.removeWidget(widget)
+            widget.deleteLater()
+        
+        # 创建新的确认窗口
+        self.confirm_add_window = ConfirmAddWindow(
+            pending_entries=pending_entries,
+            apps_json=apps_json,
+            apps_json_path=apps_json_path,
+            output_folder=output_folder,
+            pseudo_sorting_enabled=pseudo_sorting_enabled,
+            close_after_completion=close_after_completion,
+            parent=self
+        )
+        
+        # 连接信号
+        self.confirm_add_window.confirmed.connect(self._on_confirm_add_confirmed)
+        self.confirm_add_window.cancelled.connect(self._on_confirm_add_cancelled)
+        
+        # 添加到 stacked widget
+        self.confirm_add_page_index = self.stacked.addWidget(self.confirm_add_window)
+        
+        # 显示该页面
+        self.stacked.setCurrentIndex(self.confirm_add_page_index)
+    
+    def _on_confirm_add_confirmed(self, selected_entries):
+        """确认添加时的处理"""
+        if self.confirm_add_window is None:
+            return
+        
+        # 获取 apps_json 和其他必要信息
+        apps_json = self.confirm_add_window.apps_json
+        apps_json_path = self.confirm_add_window.apps_json_path
+        
+        # 调用处理函数
+        try:
+            _process_confirm_add_entries(selected_entries, apps_json, apps_json_path)
+            # 处理完成后返回到上一个页面
+            self.stacked.setCurrentIndex(0)
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "错误", f"处理确认添加时出错: {e}")
+    
+    def _on_confirm_add_cancelled(self):
+        """取消添加时的处理"""
+        # 返回到上一个页面（如添加游戏页面）
+        self.stacked.setCurrentIndex(0)
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    initialize()
     sys.exit(app.exec_())

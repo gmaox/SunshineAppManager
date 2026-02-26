@@ -572,260 +572,14 @@ def generate_covers_for_entries(pending_entries, output_folder):
     return image_target_paths, need_choose_cover_names
 
 
-class ConfirmAddWindow(QtWidgets.QDialog):
-    """
-    确认即将写入 Sunshine 的应用列表。
-    布局参考 manage_games.ManageWindow：上方搜索栏，左侧卡片列表，底部操作按钮。
-    """
 
-    covers_finished = QtCore.pyqtSignal()
 
-    def __init__(self, pending_entries, apps_json, apps_json_path, output_folder,
-                 pseudo_sorting_enabled=False, close_after_completion=True, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("确认添加到 Sunshine 的应用")
-        self.resize(820, 560)
-
-        self.pending_entries = pending_entries  # 原始待添加条目
-        self.apps_json = apps_json
-        self.apps_json_path = apps_json_path
-        self.output_folder = output_folder
-        self.pseudo_sorting_enabled = pseudo_sorting_enabled
-        self.close_after_completion = close_after_completion
-
-        self.filtered_entries = list(pending_entries)
-        self.need_choose_cover_names = []
-        self._cover_thread = None
-
-        self.covers_finished.connect(self._on_covers_finished)
-
-        self._build_ui()
-        self._start_cover_thread()
-
-    # ---------- UI ----------
-    def _build_ui(self):
-        main_layout = QtWidgets.QVBoxLayout(self)
-
-        # 顶部搜索行
-        search_layout = QtWidgets.QHBoxLayout()
-        self.search_edit = QtWidgets.QLineEdit()
-        self.search_edit.setPlaceholderText("搜索游戏...")
-        self.search_edit.textChanged.connect(self._apply_filter)
-        search_layout.addWidget(self.search_edit)
-
-        search_btn = QtWidgets.QPushButton("搜索")
-        search_btn.setFixedWidth(80)
-        search_btn.clicked.connect(self._apply_filter)
-        search_layout.addWidget(search_btn)
-
-        main_layout.addLayout(search_layout)
-
-        # 提示当前扫描数量
-        self.info_label = QtWidgets.QLabel(f"已扫描到新增加游戏：{len(self.pending_entries)} 个")
-        self.info_label.setStyleSheet("color: gray;")
-        main_layout.addWidget(self.info_label)
-
-        # 中间：滚动区域中的卡片列表
-        self.scroll_area = QtWidgets.QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-
-        self.container = QtWidgets.QWidget()
-        self.grid = QtWidgets.QGridLayout(self.container)
-        self.grid.setContentsMargins(10, 10, 10, 10)
-        self.grid.setSpacing(10)
-        self.scroll_area.setWidget(self.container)
-
-        main_layout.addWidget(self.scroll_area)
-
-        # 状态提示
-        self.status_label = QtWidgets.QLabel("正在后台生成封面，请稍候...")
-        self.status_label.setStyleSheet("color: #2E7D9B;")
-        main_layout.addWidget(self.status_label)
-
-        # 底部按钮
-        bottom_layout = QtWidgets.QHBoxLayout()
-
-        self.ignore_btn = QtWidgets.QPushButton("选择忽略游戏")
-        self.ignore_btn.clicked.connect(self._ignore_unchecked)
-        bottom_layout.addWidget(self.ignore_btn)
-
-        bottom_layout.addStretch()
-
-        self.confirm_btn = QtWidgets.QPushButton("写入 Sunshine")
-        self.confirm_btn.setFixedWidth(140)
-        self.confirm_btn.setEnabled(False)  # 等封面生成完再允许写入
-        self.confirm_btn.clicked.connect(self._on_confirm_clicked)
-        bottom_layout.addWidget(self.confirm_btn)
-
-        cancel_btn = QtWidgets.QPushButton("取消")
-        cancel_btn.setFixedWidth(100)
-        cancel_btn.clicked.connect(self.reject)
-        bottom_layout.addWidget(cancel_btn)
-
-        main_layout.addLayout(bottom_layout)
-
-        self._rebuild_cards()
-
-    def _rebuild_cards(self):
-        # 清空旧卡片
-        for i in reversed(range(self.grid.count())):
-            w = self.grid.itemAt(i).widget()
-            if w:
-                w.setParent(None)
-
-        if not self.filtered_entries:
-            label = QtWidgets.QLabel("没有需要添加的新游戏。")
-            label.setAlignment(QtCore.Qt.AlignCenter)
-            self.grid.addWidget(label, 0, 0)
-            return
-
-        width = max(300, self.width())
-        if width < 400:
-            cols = 1
-        elif width < 800:
-            cols = 2
-        else:
-            cols = 3
-
-        for c in range(cols):
-            self.grid.setColumnStretch(c, 1)
-
-        for idx, entry in enumerate(self.filtered_entries):
-            card = self._create_card_widget(entry)
-            card.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-            card.setMaximumWidth(260)
-            row = idx // cols
-            col = idx % cols
-            self.grid.addWidget(card, row, col)
-
-        viewport_width = max(300, self.scroll_area.viewport().width())
-        self.container.setMinimumWidth(viewport_width)
-
-    def _create_card_widget(self, entry):
-        frame = QtWidgets.QFrame()
-        frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        frame.setStyleSheet("QFrame { background:white; border-radius:4px; }")
-
-        h = QtWidgets.QHBoxLayout(frame)
-        h.setContentsMargins(8, 8, 8, 8)
-
-        # 封面预览（占位）
-        cover_lbl = QtWidgets.QLabel("封面生成中")
-        cover_lbl.setFixedSize(80, 120)
-        cover_lbl.setAlignment(QtCore.Qt.AlignCenter)
-        cover_lbl.setStyleSheet("background:#333;color:white")
-        h.addWidget(cover_lbl)
-
-        # 文本信息
-        v = QtWidgets.QVBoxLayout()
-        name_lbl = QtWidgets.QLabel(entry["app_name"])
-        font = name_lbl.font()
-        font.setBold(True)
-        name_lbl.setFont(font)
-        v.addWidget(name_lbl)
-
-        path_lbl = QtWidgets.QLabel(f"路径: {entry['target_path']}")
-        path_lbl.setStyleSheet("color:#666")
-        path_lbl.setWordWrap(True)
-        v.addWidget(path_lbl)
-
-        # 选择复选框
-        checkbox = QtWidgets.QCheckBox("添加此应用")
-        checkbox.setChecked(entry.get("selected", True))
-        checkbox.stateChanged.connect(lambda state, e=entry: e.__setitem__("selected", state == QtCore.Qt.Checked))
-        v.addWidget(checkbox)
-
-        v.addStretch()
-        h.addLayout(v)
-
-        entry["_cover_label"] = cover_lbl
-        entry["_checkbox"] = checkbox
-        return frame
-
-    # ---------- 封面生成（后台线程） ----------
-    def _start_cover_thread(self):
-        if not self.pending_entries:
-            self.status_label.setText("没有需要生成封面的应用。")
-            self.covers_finished.emit()
-            return
-
-        def worker():
-            image_target_paths, need_choose_cover_names = generate_covers_for_entries(
-                self.pending_entries,
-                self.output_folder
-            )
-            self.image_target_paths = image_target_paths
-            self.need_choose_cover_names = need_choose_cover_names
-            self.covers_finished.emit()
-
-        self._cover_thread = threading.Thread(target=worker, daemon=True)
-        self._cover_thread.start()
-
-    @QtCore.pyqtSlot()
-    def _on_covers_finished(self):
-        self.status_label.setText("封面生成完成，请确认要写入 Sunshine 的应用。")
-        self.confirm_btn.setEnabled(True)
-
-        # 更新卡片上的封面缩略图
-        for entry in self.pending_entries:
-            label = entry.get("_cover_label")
-            cover_path = entry.get("cover_path")
-            if not label or not cover_path or not os.path.exists(cover_path):
-                continue
-            try:
-                from PIL import Image
-                img = Image.open(cover_path)
-                img.thumbnail((80, 120))
-                data = img.tobytes("raw", "RGBA") if img.mode == 'RGBA' else None
-                if not data:
-                    img = img.convert('RGBA')
-                    data = img.tobytes('raw', 'RGBA')
-                qimg = QtGui.QImage(data, img.width, img.height, QtGui.QImage.Format_RGBA8888)
-                pix = QtGui.QPixmap.fromImage(qimg)
-                label.setPixmap(pix.scaled(80, 120, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-                label.setText("")
-            except Exception:
-                # 失败时保持占位文本即可
-                pass
-
-    # ---------- 交互逻辑 ----------
-    def _apply_filter(self):
-        term = self.search_edit.text().strip().lower()
-        if not term:
-            self.filtered_entries = list(self.pending_entries)
-        else:
-            self.filtered_entries = [
-                e for e in self.pending_entries
-                if term in e["app_name"].lower()
-                or term in str(e["target_path"]).lower()
-            ]
-        self._rebuild_cards()
-
-    def _ignore_unchecked(self):
-        """简单实现：什么都不做；用户可以直接取消勾选来忽略，按钮仅做提示。"""
-        QtWidgets.QMessageBox.information(
-            self,
-            "提示",
-            "已自动忽略未勾选的应用，你只需勾选想要添加的条目，然后点击“写入 Sunshine”。"
-        )
-
-    def _on_confirm_clicked(self):
-        # 仅保留选中的条目
-        selected = [e for e in self.pending_entries if e.get("selected", True)]
-        if not selected:
-            QtWidgets.QMessageBox.information(self, "提示", "当前没有选中的应用。")
-            return
-        self.pending_entries = selected
-        self.accept()
-
-    def get_selected_entries(self):
-        return list(self.pending_entries)
+from confirm_add_window import ConfirmAddWindow
 
 
 def runtomain():
     """
-    扫描工作目录中的 .lnk / .url，弹出确认窗口供用户选择要写入 Sunshine 的应用。
+    扫描工作目录中的 .lnk / .url，通过 main window 显示确认窗口供用户选择要写入 Sunshine 的应用。
     在窗口显示期间后台异步生成封面，确认后再写入 apps.json 并重启 Sunshine。
     """
     global folder_selected, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
@@ -835,6 +589,16 @@ def runtomain():
         os.makedirs(output_folder)
 
     apps_json = load_apps_json(apps_json_path)
+    
+    # 获取 main window 实例
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return
+    
+    main_window = app.activeWindow()
+    if main_window is None or not hasattr(main_window, 'show_confirm_add_window'):
+        # 如果没有找到 main window，使用旧的对话框方式
+        return _runtomain_legacy(apps_json)
 
     # 收集已有条目的名称（不含扩展名）用于去重
     existing_names = set()
@@ -863,7 +627,6 @@ def runtomain():
 
     # 构造待添加的快捷方式列表（不写入 apps.json，只做预览）
     pending_entries = []
-    image_target_paths = []
 
     # 当前目录下的 .lnk
     for lnk in lnk_files:
@@ -875,8 +638,7 @@ def runtomain():
         except Exception as e:
             print(f"获取 {lnk} 目标路径失败: {e}")
             continue
-        image_index = find_unused_index(apps_json, image_target_paths)
-        image_target_paths.append((lnk, image_index))
+        image_index = find_unused_index(apps_json, [])
         pending_entries.append({
             "app_name": base_name,
             "shortcut_file": lnk,
@@ -890,8 +652,7 @@ def runtomain():
         base_name = os.path.splitext(url_file)[0]
         if base_name in existing_names:
             continue
-        image_index = find_unused_index(apps_json, image_target_paths)
-        image_target_paths.append((url_file, image_index))
+        image_index = find_unused_index(apps_json, [])
         pending_entries.append({
             "app_name": base_name,
             "shortcut_file": url_file,
@@ -900,45 +661,29 @@ def runtomain():
             "selected": True,
         })
 
-    # 如果当前没有 QApplication（例如直接通过命令行运行），尽量复用/创建一个临时应用
-    app = QtWidgets.QApplication.instance()
-    created_app = False
-    if app is None:
-        app = QtWidgets.QApplication(sys.argv)
-        created_app = True
-
     if not pending_entries:
         QtWidgets.QMessageBox.information(
             None,
             "提示",
             "没有检测到需要添加的新应用。"
         )
-        if created_app:
-            app.quit()
         return
-
-    parent = app.activeWindow()
-    dialog = ConfirmAddWindow(
+    
+    # 通过 main window 显示确认窗口
+    main_window.show_confirm_add_window(
         pending_entries=pending_entries,
         apps_json=apps_json,
         apps_json_path=apps_json_path,
         output_folder=output_folder,
         pseudo_sorting_enabled=pseudo_sorting_enabled,
-        close_after_completion=close_after_completion,
-        parent=parent,
+        close_after_completion=close_after_completion
     )
 
-    result = dialog.exec_()
-    if result != QtWidgets.QDialog.Accepted:
-        if created_app:
-            app.quit()
-        print("用户取消了添加操作。")
-        return
 
-    selected_entries = dialog.get_selected_entries()
-    image_target_paths = getattr(dialog, "image_target_paths", image_target_paths)
-    need_choose_cover_names = dialog.need_choose_cover_names
-
+def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
+    """处理确认添加的条目，将其写入 apps.json"""
+    global pseudo_sorting_enabled, close_after_completion
+    
     # 将选中的条目写入 apps.json
     for entry in selected_entries:
         shortcut_file = entry["shortcut_file"]
@@ -958,24 +703,17 @@ def runtomain():
     save_apps_json(apps_json, apps_json_path)
     restart_service()
 
-    # 统一调用 -choosecover 进行封面微调
-    if need_choose_cover_names:
-        exe_path = sys.executable if getattr(sys, 'frozen', False) else sys.argv[0]
-        total_games = len(need_choose_cover_names)
-        for i, name in enumerate(need_choose_cover_names):
-            remaining_games = total_games - i
-            try:
-                cmd = [exe_path, "-choosecover", name, str(remaining_games)]
-                process = subprocess.Popen(cmd)
-                process.wait()
-            except Exception as e:
-                print(f"调用SGDB封面选择失败: {e}")
-
-    if created_app:
-        app.quit()
-
     if close_after_completion:
         os._exit(0)
+
+
+def _runtomain_legacy(apps_json):
+    """旧的对话框方式（当没有 main window 时使用）"""
+    global folder_selected, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
+    print("使用旧的对话框方式")
+    return
+
+
 def get_steam_base_dir():
     """
     获取Steam的安装目录
