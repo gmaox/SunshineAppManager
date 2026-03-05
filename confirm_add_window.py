@@ -377,7 +377,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
     @QtCore.pyqtSlot()
     def _on_covers_finished(self):
         """封面生成完成后的回调"""
-        self.status_label.setText("封面生成完成，请确认要写入 Sunshine 的应用。")
+        self.status_label.setText("封面整理完成，请确认要写入 Sunshine 的应用。")
         self.confirm_btn.setEnabled(True)
 
         # 更新卡片上的封面缩略图
