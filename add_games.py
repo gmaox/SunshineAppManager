@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
 from basic_def import runtomain, add_files_to_work_folder_as_shortcuts
+from scanner_add_page import load_scanners, save_scanners
+from scanner_manage_page import run_scanner, _load_ignored_targets, _get_work_folder
 
 
 class AddGameWindow(QWidget):
@@ -124,15 +126,15 @@ class AddGameWindow(QWidget):
         right_layout.addWidget(right_desc2)
         
         # 说明文本 - 第三段
-        right_desc3 = QLabel("扫描器不会扫描忽略列表的游戏。\n你可以在右侧某单编辑运作的扫描器\n运作的扫描器：")
+        right_desc3 = QLabel("扫描器不会扫描忽略列表的游戏。\n你可以在右侧某单编辑运作的扫描器\n启用的扫描器：（双击可切换状态）")
         right_desc3.setFont(QFont("Segoe UI", 12))
         right_desc3.setWordWrap(True)
         right_layout.addWidget(right_desc3)
         
         # 扫描器列表
-        scanner_list = QListWidget()
-        scanner_list.setMinimumHeight(120)
-        scanner_list.setStyleSheet(
+        self.scanner_list = QListWidget()
+        self.scanner_list.setMinimumHeight(120)
+        self.scanner_list.setStyleSheet(
             "QListWidget {"
             "  border: 2px solid #2E7D9B;"
             "  border-radius: 5px;"
@@ -144,12 +146,15 @@ class AddGameWindow(QWidget):
             "  color: white;"
             "}"
         )
-        # 为空列表添加占位符
-        placeholder_item = QListWidgetItem("（未选择任何扫描器）")
-        placeholder_item.setFlags(placeholder_item.flags() & ~Qt.ItemIsSelectable)
-        scanner_list.addItem(placeholder_item)
+        right_layout.addWidget(self.scanner_list)
         
-        right_layout.addWidget(scanner_list)
+        # 连接双击事件以切换启用状态
+        self.scanner_list.itemDoubleClicked.connect(self._toggle_scanner_enabled)
+
+        # 初始加载扫描器
+        self.reload_scanners()
+
+        right_layout.addStretch()
         
         # 添加弹性间隔
         right_layout.addStretch()
@@ -182,6 +187,70 @@ class AddGameWindow(QWidget):
         main_layout.addWidget(right_widget, 1)
         
         self.setLayout(main_layout)
+
+        # 连接扫描按钮
+        scan_btn.clicked.connect(self.run_enabled_scanners)
+
+    def reload_scanners(self):
+        """刷新扫描器列表，灰色显示未启用条目"""
+        self.scanner_list.clear()
+        scanners = load_scanners()
+        if not scanners:
+            item = QListWidgetItem("（无扫描器）")
+            item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
+            self.scanner_list.addItem(item)
+            return
+
+        for s in scanners:
+            name = s.get("name", "")
+            item = QListWidgetItem(name)
+            item.setData(Qt.UserRole, s.get("id"))
+            if not bool(s.get("enabled", True)):
+                item.setForeground(Qt.gray)
+            self.scanner_list.addItem(item)
+
+    def _toggle_scanner_enabled(self, item):
+        sid = item.data(Qt.UserRole)
+        scanners = load_scanners()
+        changed = False
+        for s in scanners:
+            if s.get("id") == sid:
+                s["enabled"] = not bool(s.get("enabled", True))
+                changed = True
+                break
+        if changed:
+            save_scanners(scanners)
+            self.reload_scanners()
+
+    def run_enabled_scanners(self):
+        scanners = [s for s in load_scanners() if s.get("enabled", True)]
+        if not scanners:
+            QMessageBox.information(self, "扫描", "没有已启用的扫描器可运行。")
+            return
+
+        ignored = _load_ignored_targets()
+        work_folder = _get_work_folder()
+        total_created = total_skipped = total_errors = 0
+        for s in scanners:
+            created, skipped, errors, note = run_scanner(s, work_folder, ignored, progress_cb=lambda m: None)
+            total_created += created
+            total_skipped += skipped
+            total_errors += errors
+
+        # 用非阻塞通知显示结果
+        from PyQt5.QtWidgets import QApplication
+        msg = (
+            f"已运行 {len(scanners)} 个扫描器\n"
+            f"创建 {total_created}, 跳过 {total_skipped}, 错误 {total_errors}\n"
+            f"输出文件夹: {work_folder}"
+        )
+        print(msg)  # 同时打印到日志
+        app = QApplication.instance()
+        if app:
+            for w in app.topLevelWidgets():
+                if hasattr(w, 'log_tab'):
+                    w.log_tab.show_success_notification(msg)
+                    break
     def _extract_dropped_paths(self, event):
         paths = []
         mime = event.mimeData()

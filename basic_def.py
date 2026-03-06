@@ -550,8 +550,12 @@ def get_url_files(include_hidden=False):
                 continue
                 
             target_path = get_url_target_path(url)
+            if not target_path:
+                # 没有找到任何路径信息，但仍然把该文件视为有效条目
+                print(f"注意: {url} 未包含 IconFile 或 URL 字段，后续将以空目标处理")
             valid_url_files.append((url, target_path))
         except Exception as e:
+            # 现在 get_url_target_path 应该不再抛出，不过保留捕获以防万一
             print(f"无法获取 {url} 的目标路径: {e}")
     
     print("找到的 .url 文件:")
@@ -560,15 +564,47 @@ def get_url_files(include_hidden=False):
     return valid_url_files
 
 def get_url_target_path(url_file):
-    # 读取 .url 文件并获取目标路径
+    """Read a .url file and return a target path.
+
+    The original implementation only looked for an "IconFile=" line and
+    raised an exception if it wasn't found.  This causes benign URL shortcuts
+    (for example, web links) with no explicit icon entry to be skipped during
+    scanning.
+
+    To improve robustness we:
+    1. Prefer the path from "IconFile=" if present (this is most useful for
+       shortcuts that point to executables).
+    2. Otherwise fall back to the URL specified by "URL=" so that purely
+       web shortcuts still return something useful.
+    3. If neither field is present return an empty string instead of raising
+       an exception; callers can choose how to handle the missing target.
+    """
+    icon_path = None
+    url_path = None
+
     with open(url_file, 'r', encoding='utf-8') as f:
-        content = f.readlines()
-    
-    for line in content:
-        if line.startswith("IconFile="):
-            icon_file = line.split("=", 1)[1].strip()
-            return icon_file  # 返回图标文件路径或可执行文件路径
-    raise ValueError("未找到 IconFile 路径")
+        for raw in f:
+            line = raw.strip()
+            if not line or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip().lower()
+            value = value.strip()
+            if key == "iconfile" and value:
+                icon_path = value
+                # we prefer icon path but continue reading in case a URL also
+                # exists; we don't break immediately so we can gather both
+            elif key == "url" and value:
+                url_path = value
+
+    if icon_path:
+        return icon_path
+    if url_path:
+        return url_path
+
+    # nothing useful found; return empty string rather than throwing so the
+    # caller can still add the shortcut but may not be able to generate a cover
+    return ""
 
 def restart_service():
     """

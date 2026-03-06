@@ -47,20 +47,6 @@ def _safe_name(value):
     return text[:140].strip() or "unnamed"
 
 
-def _build_unique_path(folder, base_name, suffix):
-    base_name = _safe_name(base_name)
-    first = os.path.join(folder, f"{base_name}{suffix}")
-    if not os.path.exists(first):
-        return first
-
-    idx = 1
-    while True:
-        candidate = os.path.join(folder, f"{base_name} ({idx}){suffix}")
-        if not os.path.exists(candidate):
-            return candidate
-        idx += 1
-
-
 def _is_hidden(path):
     name = os.path.basename(path).strip()
     return bool(name.startswith("."))
@@ -224,8 +210,13 @@ def _scan_steam(scanner, work_folder, ignored_targets, progress_cb):
                 continue
 
             try:
-                file_base = f"{scanner_name} - {app_name}"
-                out_path = _build_unique_path(work_folder, file_base, ".url")
+                # base name is just the app name (no scanner prefix)
+                base_name = app_name
+                out_path = os.path.join(work_folder, f"{_safe_name(base_name)}.url")
+                if os.path.exists(out_path):
+                    skipped += 1
+                    continue
+
                 _write_url_shortcut(out_path, run_url)
                 created += 1
                 progress_cb(f"[{scanner_name}] added: {app_name}")
@@ -281,7 +272,12 @@ def _scan_epic(scanner, work_folder, ignored_targets, progress_cb):
                 continue
 
             try:
-                out_path = _build_unique_path(work_folder, f"{scanner_name} - {app_name}", ".lnk")
+                # use app_name directly and skip if target exists
+                out_path = os.path.join(work_folder, f"{_safe_name(app_name)}.lnk")
+                if os.path.exists(out_path):
+                    skipped += 1
+                    continue
+
                 _create_lnk(
                     out_path,
                     target_path=exe_path,
@@ -333,8 +329,12 @@ def _scan_custom(scanner, work_folder, ignored_targets, progress_cb):
 
         app_name = os.path.splitext(os.path.basename(src))[0]
         try:
+            base_name = app_name
             if ext == ".exe":
-                out_path = _build_unique_path(work_folder, f"{scanner_name} - {app_name}", ".lnk")
+                out_path = os.path.join(work_folder, f"{_safe_name(base_name)}.lnk")
+                if os.path.exists(out_path):
+                    skipped += 1
+                    continue
                 _create_lnk(
                     out_path,
                     target_path=src,
@@ -342,7 +342,10 @@ def _scan_custom(scanner, work_folder, ignored_targets, progress_cb):
                     icon_location=src,
                 )
             else:
-                out_path = _build_unique_path(work_folder, f"{scanner_name} - {app_name}", ext)
+                out_path = os.path.join(work_folder, f"{_safe_name(base_name)}{ext}")
+                if os.path.exists(out_path):
+                    skipped += 1
+                    continue
                 shutil.copy2(src, out_path)
             created += 1
             progress_cb(f"[{scanner_name}] added: {app_name}")
@@ -399,7 +402,12 @@ def _scan_rom(scanner, work_folder, ignored_targets, progress_cb):
             if "{rom}" not in args_tpl:
                 arguments = (args_tpl + " " + quoted_rom).strip()
 
-            out_path = _build_unique_path(work_folder, f"{scanner_name} - {rom_name}", ".lnk")
+            base_name = rom_name
+            out_path = os.path.join(work_folder, f"{_safe_name(base_name)}.lnk")
+            if os.path.exists(out_path):
+                skipped += 1
+                continue
+
             _create_lnk(
                 out_path,
                 target_path=emulator,
@@ -447,6 +455,8 @@ class ScannerEditDialog(QtWidgets.QDialog):
         form.addRow("类型：", self.type_lbl)
 
         self.source_input = QtWidgets.QLineEdit(self.scanner.get("source", ""))
+        # if the user clears the name and then changes the source we can suggest a name again
+        self.source_input.textChanged.connect(self._on_source_changed)
         form.addRow("源路径：", self.source_input)
 
         self.enabled_chk = QtWidgets.QCheckBox("已启用")
@@ -491,6 +501,41 @@ class ScannerEditDialog(QtWidgets.QDialog):
         self.emulator_input.setEnabled(rom_mode)
         self.args_input.setEnabled(rom_mode)
         self.ext_input.setEnabled(rom_mode)
+
+    def _auto_fill_name(self):
+        """Suggest a name when the name field is currently blank."""
+        scanner_type = self.scanner.get("type")
+        source = self.source_input.text().strip()
+        name = ""
+        if scanner_type == "steam":
+            name = "Steam 库"
+            if source:
+                base = os.path.basename(source.rstrip("\\/"))
+                if base:
+                    name = f"Steam 库 ({base})"
+        elif scanner_type == "epic":
+            name = "Epic 清单"
+            if source:
+                base = os.path.basename(source.rstrip("\\/"))
+                if base:
+                    name = f"Epic 清单 ({base})"
+        elif scanner_type == "rom":
+            if source:
+                name = os.path.basename(source.rstrip("\\/"))
+            else:
+                name = "ROM 扫描器"
+        else:
+            if source:
+                name = os.path.basename(source.rstrip("\\/"))
+            else:
+                name = "自定义文件夹"
+
+        if name and not self.name_input.text().strip():
+            self.name_input.setText(name)
+
+    def _on_source_changed(self, text):
+        if not self.name_input.text().strip():
+            self._auto_fill_name()
 
     def updated_scanner(self):
         out = dict(self.scanner)

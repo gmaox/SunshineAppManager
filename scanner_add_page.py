@@ -1,14 +1,18 @@
 ﻿import json
 import os
+import sys
 import time
 import uuid
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from basic_def import APP_INSTALL_PATH
 
-
-SCANNERS_JSON_PATH = os.path.join(APP_INSTALL_PATH, "config", "scanners.json")
+if getattr(sys, 'frozen', False):
+    # 如果是打包后的应用程序
+    SCANNERS_JSON_PATH = os.path.join(os.path.dirname(sys.executable), 'config', 'scanners.json')
+else:
+    # 如果是开发环境
+    SCANNERS_JSON_PATH = os.path.join(os.path.dirname(__file__), 'config', 'scanners.json')
 
 
 def _ensure_scanner_store_dir():
@@ -61,6 +65,9 @@ class ScannerAddPage(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # track the last name we filled automatically so we know when
+        # it's safe to overwrite it later (e.g. on type change)
+        self._last_auto_name = ""
         self._setup_ui()
         self._update_type_fields()
         self._update_saved_count()
@@ -97,19 +104,22 @@ class ScannerAddPage(QtWidgets.QWidget):
         self.type_combo.addItem("Epic 清单", "epic")
         self.type_combo.addItem("ROM 文件夹", "rom")
         self.type_combo.addItem("自定义文件夹", "custom")
+        # update field visibility and possibly auto-fill the name when type changes
         self.type_combo.currentIndexChanged.connect(self._update_type_fields)
         form.addRow("类型：", self.type_combo)
 
         source_row = QtWidgets.QHBoxLayout()
         self.source_input = QtWidgets.QLineEdit()
         self.source_input.setPlaceholderText("留空则自动检测")
+        # when the source path changes we may want to auto-generate a name
+        self.source_input.textChanged.connect(self._on_source_changed)
         source_row.addWidget(self.source_input, 1)
         source_btn = QtWidgets.QPushButton("浏览")
         source_btn.clicked.connect(self._browse_source)
         source_row.addWidget(source_btn)
         form.addRow("源路径：", source_row)
 
-        self.enabled_chk = QtWidgets.QCheckBox("已启用")
+        self.enabled_chk = QtWidgets.QCheckBox("启用")
         self.enabled_chk.setChecked(True)
         form.addRow("", self.enabled_chk)
 
@@ -165,6 +175,52 @@ class ScannerAddPage(QtWidgets.QWidget):
         count = len(load_scanners())
         self.saved_label.setText(f"已保存的扫描器：{count}")
 
+    def _auto_fill_name(self):
+        """Generate a reasonable default name based on type and source.
+
+        Only call this when the user hasn't entered any name yet. The
+        intention is to save them from typing anything most of the time.
+        """
+        scanner_type = self.type_combo.currentData()
+        source = self.source_input.text().strip()
+        name = ""
+
+        if scanner_type == "steam":
+            name = "Steam 库"
+            if source:
+                base = os.path.basename(source.rstrip("\\/"))
+                if base:
+                    name = f"Steam 库 ({base})"
+        elif scanner_type == "epic":
+            name = "Epic 清单"
+            if source:
+                base = os.path.basename(source.rstrip("\\/"))
+                if base:
+                    name = f"Epic 清单 ({base})"
+        elif scanner_type == "rom":
+            if source:
+                name = os.path.basename(source.rstrip("\\/"))
+            else:
+                name = "ROM 扫描器"
+        else:  # custom
+            if source:
+                name = os.path.basename(source.rstrip("\\/"))
+            else:
+                name = "自定义文件夹"
+
+        # only update the field if it's currently empty or matches the last
+        # auto-generated value we produced earlier
+        current = self.name_input.text().strip()
+        if name and (not current or current == self._last_auto_name):
+            self.name_input.setText(name)
+            self._last_auto_name = name
+
+    def _on_source_changed(self, text):
+        # when a new source is typed or selected we might want to suggest a name
+        current = self.name_input.text().strip()
+        if not current or current == self._last_auto_name:
+            self._auto_fill_name()
+
     def _reset_form(self):
         self.name_input.clear()
         self.type_combo.setCurrentIndex(0)
@@ -182,6 +238,8 @@ class ScannerAddPage(QtWidgets.QWidget):
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "选择扫描器源文件夹")
         if directory:
             self.source_input.setText(os.path.normpath(directory))
+            # browsing sets the source text which in turn may auto-fill the name
+
 
     def _browse_emulator(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -204,9 +262,9 @@ class ScannerAddPage(QtWidgets.QWidget):
         self.hidden_chk.setEnabled(rom_mode or custom_mode)
 
         if scanner_type == "steam":
-            self.source_input.setPlaceholderText("可选的 Steam 根路径（留空则自动检测）")
+            self.source_input.setPlaceholderText("可选的 Steam 根路径（留空则自动检测，无特殊需求留空即可）")
         elif scanner_type == "epic":
-            self.source_input.setPlaceholderText("可选的 Epic 清单目录（留空则自动检测）")
+            self.source_input.setPlaceholderText("可选的 Epic 清单目录（留空则自动检测，无特殊需求留空即可）")
         elif scanner_type == "rom":
             self.source_input.setPlaceholderText("ROM 目录")
         else:
@@ -214,6 +272,10 @@ class ScannerAddPage(QtWidgets.QWidget):
 
         if steam_or_epic_mode and not self.source_input.text().strip():
             self.recursive_chk.setChecked(False)
+
+        # when the type changes we may want to adjust the name even if it
+        # currently contains the previous auto-generated value
+        self._auto_fill_name()
 
     def _build_scanner(self):
         scanner_type = self.type_combo.currentData()
