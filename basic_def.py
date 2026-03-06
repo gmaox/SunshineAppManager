@@ -327,6 +327,18 @@ def create_image_with_icon(exe_path, output_path ,idx):
                 icon_img = icon_img.convert('RGBA')
 
             icon_width, icon_height = icon_img.size
+
+            # 调整图标大小，使最长边为 256 像素（无论原图大或小）。
+            # 保持宽高比。直接改变原图以节省内存。
+            max_dim = max(icon_width, icon_height)
+            if max_dim != 256:
+                scale = 256.0 / max_dim
+                new_w = int(icon_width * scale)
+                new_h = int(icon_height * scale)
+                # Pillow 10+ removed ANTIALIAS; use LANCZOS which is equivalent
+                icon_img = icon_img.resize((new_w, new_h), Image.LANCZOS)
+                icon_width, icon_height = icon_img.size
+
             dominant_colors = get_dominant_colors(icon_img)
             # 将两个主要颜色调暗30%
             color1 = tuple(int(c * 0.7) for c in dominant_colors[0])
@@ -334,21 +346,31 @@ def create_image_with_icon(exe_path, output_path ,idx):
 
             # Use PIL native gradient composition instead of per-pixel Python loops.
             # This greatly reduces CPU load and keeps UI responsive while covers are generated.
+            # diagonal gradient: blend color1→color2 from top-left to bottom-right
             try:
-                gradient_mask = Image.linear_gradient('L').resize((600, 900))
+                # create mask manually since linear_gradient doesn't support diagonal directly
+                gradient_mask = Image.new('L', (600, 900))
+                pix = gradient_mask.load()
+                for yy in range(900):
+                    for xx in range(600):
+                        ratio = (xx / 600 + yy / 900) / 2
+                        pix[xx, yy] = int(ratio * 255)
                 bg_1 = Image.new('RGBA', (600, 900), color1 + (255,))
                 bg_2 = Image.new('RGBA', (600, 900), color2 + (255,))
                 img = Image.composite(bg_2, bg_1, gradient_mask)
             except Exception:
-                # Fallback path for older PIL versions.
+                # Fallback for any unexpected error, still manual diagonal loop
                 img = Image.new('RGBA', (600, 900), color=color1 + (255,))
                 draw = ImageDraw.Draw(img)
                 for y in range(900):
-                    ratio = y / 900
-                    r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
-                    g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
-                    b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
-                    draw.line((0, y, 599, y), fill=(r, g, b, 255))
+                    for x in range(600):
+                        ratio_x = x / 600
+                        ratio_y = y / 900
+                        ratio = (ratio_x + ratio_y) / 2
+                        r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
+                        g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
+                        b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
+                        draw.point((x, y), fill=(r, g, b, 255))
 
             icon_x = (600 - icon_width) // 2
             icon_y = (900 - icon_height) // 2
