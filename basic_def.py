@@ -638,16 +638,28 @@ def _collect_cover_search_terms(app_name, target_path, shortcut_file):
         seen.add(norm)
         terms.append(value)
 
+    # 1. 优先使用应用显示名
     _push(app_name)
+    # 2. 再用快捷方式文件名
     if shortcut_file:
         _push(os.path.splitext(os.path.basename(shortcut_file))[0])
 
     cleaned_target = str(target_path or "").strip().strip('"')
     if cleaned_target:
-        _push(os.path.splitext(os.path.basename(cleaned_target))[0])
-        _push(os.path.basename(os.path.dirname(cleaned_target)))
+        base = os.path.splitext(os.path.basename(cleaned_target))[0]
+        parent = os.path.basename(os.path.dirname(cleaned_target))
 
-    return terms[:4]
+        # 过滤掉过于泛泛的目录名，避免产生大量低质量候选
+        generic_parents = {
+            "bin", "game", "games", "steam", "program files",
+            "program files (x86)", "common"
+        }
+        _push(base)
+        if parent.lower() not in generic_parents:
+            _push(parent)
+
+    # 限制搜索关键词数量，减少请求次数并提升整体速度
+    return terms[:3]
 
 
 class SteamGridDBApiClient:
@@ -712,7 +724,8 @@ class SteamGridDBApiClient:
 
         from urllib.parse import quote
         url = f"{self.base_url}/search/autocomplete/{quote(query)}"
-        response = self._request(url, timeout=(8, 25))
+        # 收紧超时时间，提升失败快速返回的体验
+        response = self._request(url, timeout=(6, 18))
         payload = response.json() if response.content else {}
         data = payload.get("data") if isinstance(payload, dict) else []
         games = data if isinstance(data, list) else []
@@ -728,7 +741,7 @@ class SteamGridDBApiClient:
             return self._grids_cache[gid]
 
         url = f"{self.base_url}/grids/game/{gid}?types=static&dimensions=600x900"
-        response = self._request(url, timeout=(8, 25))
+        response = self._request(url, timeout=(6, 20))
         payload = response.json() if response.content else {}
         data = payload.get("data") if isinstance(payload, dict) else []
         grids = data if isinstance(data, list) else []
@@ -816,7 +829,8 @@ def _pick_best_sgdb_game(sgdb_client, app_name, target_path, shortcut_file):
         if not games:
             continue
 
-        for rank, game in enumerate(games[:12]):
+        # 限制每个关键字参与打分的候选数量，降低比对开销
+        for rank, game in enumerate(games[:8]):
             if not isinstance(game, dict):
                 continue
             game_id = game.get("id")
@@ -830,6 +844,11 @@ def _pick_best_sgdb_game(sgdb_client, app_name, target_path, shortcut_file):
                 best_score = score
                 best_game = game
 
+            # 当已经有较高匹配度时，提前结束当前关键字的遍历
+            if best_score >= 0.97 and rank >= 3:
+                break
+
+        # 如果已经找到非常接近的结果，则不再尝试后续关键字
         if best_score >= 0.995:
             break
 
