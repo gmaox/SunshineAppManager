@@ -246,9 +246,12 @@ class SettingsPage(QWidget):
         try:
             dirname = QFileDialog.getExistingDirectory(self, "选择工作路径", basic_def.folder or os.path.expanduser("~"))
             if dirname:
-                dirname = dirname.replace('\\', '/')
+                dirname = os.path.normpath(dirname).replace('\\', '/')
                 self.work_path_input.setText(dirname)
                 basic_def.folder = dirname
+                basic_def.folder_selected = dirname
+                if not os.path.isdir(dirname):
+                    os.makedirs(dirname, exist_ok=True)
                 basic_def.save_config()
         except Exception as e:
             print(f"选择工作路径失败: {e}")

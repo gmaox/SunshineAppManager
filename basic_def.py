@@ -184,6 +184,77 @@ def save_config():
             config.write(configfile)
     except Exception as e:
         print(f"保存配置文件时出错: {e}")
+
+def _build_unique_shortcut_path(target_folder, base_name):
+    """Generate a non-conflicting .lnk path in target folder."""
+    candidate = os.path.join(target_folder, f"{base_name}.lnk")
+    if not os.path.exists(candidate):
+        return candidate
+
+    index = 1
+    while True:
+        candidate = os.path.join(target_folder, f"{base_name} ({index}).lnk")
+        if not os.path.exists(candidate):
+            return candidate
+        index += 1
+
+
+def add_files_to_work_folder_as_shortcuts(file_paths):
+    """
+    Add dropped .exe/.lnk files into work folder as shortcuts.
+    - .exe: create new .lnk
+    - .lnk: copy as .lnk (with auto-rename on name conflict)
+    """
+    global folder_selected
+
+    load_config()
+    if not folder_selected:
+        folder_selected = os.path.realpath(
+            os.path.join(os.path.dirname(sys.executable), "appfolder")
+        ).replace("\\", "/")
+
+    os.makedirs(folder_selected, exist_ok=True)
+    shell = win32com.client.Dispatch("WScript.Shell")
+
+    result = {
+        "work_folder": folder_selected,
+        "created": [],
+        "skipped": [],
+        "errors": [],
+    }
+
+    for raw_path in file_paths or []:
+        src = (raw_path or "").strip().strip('"')
+        if not src:
+            continue
+        if not os.path.exists(src):
+            result["errors"].append((src, "file_not_found"))
+            continue
+
+        ext = os.path.splitext(src)[1].lower()
+        if ext not in (".exe", ".lnk"):
+            result["skipped"].append(src)
+            continue
+
+        base_name = os.path.splitext(os.path.basename(src))[0]
+        shortcut_path = _build_unique_shortcut_path(folder_selected, base_name)
+
+        try:
+            if ext == ".lnk":
+                shutil.copy2(src, shortcut_path)
+            else:
+                shortcut = shell.CreateShortCut(shortcut_path)
+                shortcut.TargetPath = src
+                shortcut.WorkingDirectory = os.path.dirname(src)
+                shortcut.IconLocation = src
+                shortcut.save()
+            result["created"].append(shortcut_path)
+            print(f"已创建快捷方式: {shortcut_path}")
+        except Exception as e:
+            result["errors"].append((src, str(e)))
+            print(f"创建快捷方式失败: {src} -> {e}")
+
+    return result
 def get_lnk_files(include_hidden=False):
     # 获取当前工作目录下的所有 .lnk 文件
     lnk_files = glob.glob("*.lnk")

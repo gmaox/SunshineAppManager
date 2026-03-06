@@ -1,15 +1,16 @@
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QListWidget,
-    QListWidgetItem, QFrame
+    QListWidgetItem, QFrame, QMessageBox
 )
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
-from basic_def import runtomain
+from basic_def import runtomain, add_files_to_work_folder_as_shortcuts
 
 
 class AddGameWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAcceptDrops(True)
         self.init_ui()
     
     def init_ui(self):
@@ -181,3 +182,67 @@ class AddGameWindow(QWidget):
         main_layout.addWidget(right_widget, 1)
         
         self.setLayout(main_layout)
+    def _extract_dropped_paths(self, event):
+        paths = []
+        mime = event.mimeData()
+
+        if mime.hasUrls():
+            for url in mime.urls():
+                if url.isLocalFile():
+                    local_path = url.toLocalFile()
+                    if local_path:
+                        paths.append(local_path)
+
+        if not paths and mime.hasText():
+            raw = mime.text().strip()
+            if raw:
+                # Fallback for drag sources that provide text payload.
+                chunks = [x.strip().strip('{}') for x in raw.splitlines() if x.strip()]
+                paths.extend(chunks)
+
+        return paths
+
+    def _has_supported_drop_file(self, event):
+        for path in self._extract_dropped_paths(event):
+            lowered = path.lower()
+            if lowered.endswith('.exe') or lowered.endswith('.lnk'):
+                return True
+        return False
+
+    def dragEnterEvent(self, event):
+        if self._has_supported_drop_file(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if self._has_supported_drop_file(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        paths = [
+            p for p in self._extract_dropped_paths(event)
+            if p.lower().endswith('.exe') or p.lower().endswith('.lnk')
+        ]
+
+        if not paths:
+            QMessageBox.warning(self, '提示', '仅支持拖入 .exe 或 .lnk 文件。')
+            event.ignore()
+            return
+
+        result = add_files_to_work_folder_as_shortcuts(paths)
+        created_count = len(result.get('created', []))
+        skipped_count = len(result.get('skipped', []))
+        error_count = len(result.get('errors', []))
+
+        lines = [f"已在工作文件夹创建 {created_count} 个快捷方式。"]
+        if skipped_count:
+            lines.append(f"已跳过 {skipped_count} 个不支持文件。")
+        if error_count:
+            lines.append(f"有 {error_count} 个文件处理失败，请查看日志页。")
+        lines.append(f"工作文件夹: {result.get('work_folder', '')}")
+
+        QMessageBox.information(self, '拖入添加完成', '\n'.join(lines))
+        event.acceptProposedAction()
