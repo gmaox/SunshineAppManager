@@ -5,7 +5,7 @@ from io import BytesIO
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from basic_def import generate_covers_for_entries
+from basic_def import generate_covers_for_entries, config, save_config
 from sgdb_cover_window import choose_cover_with_sgdb_qt
 
 THUMB_SIZE = (80, 120)
@@ -432,6 +432,54 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self._debounce_refresh()
 
     def _toggle_ignore_mode(self):
+        if self.ignore_mode:
+            # 从忽略模式切换回正常模式，处理被忽略的应用
+            ignored_entries = [e for e in self.pending_entries if not e.get('selected', True)]
+        if self.ignore_mode:
+            # 从忽略模式切换回正常模式，处理被忽略的应用
+            ignored_entries = [e for e in self.pending_entries if not e.get('selected', True)]
+            if ignored_entries:
+                # 加载配置
+                import json
+                ignored_apps_str = config.get('Settings', 'ignored_apps', fallback='[]')
+                try:
+                    ignored_apps = json.loads(ignored_apps_str)
+                except json.JSONDecodeError:
+                    ignored_apps = []
+                
+                # 添加到忽略列表
+                for entry in ignored_entries:
+                    app_path = entry.get('target_path', '')
+                    app_name = entry.get('app_name', 'Unknown')
+                    
+                    # 检查是否已存在
+                    exists = any(app.get('path') == app_path for app in ignored_apps)
+                    if not exists and app_path:
+                        ignored_apps.append({
+                            'name': app_name,
+                            'path': app_path
+                        })
+                
+                # 保存配置
+                ignored_apps_str = json.dumps(ignored_apps, ensure_ascii=False)
+                config.set('Settings', 'ignored_apps', ignored_apps_str)
+                save_config()
+                
+                # 使用绿色成功通知而不是弹出对话框
+                from PyQt5.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app:
+                    for w in app.topLevelWidgets():
+                        if hasattr(w, 'log_tab'):
+                            w.log_tab.show_success_notification(
+                                f'已将 {len(ignored_entries)} 个应用添加到忽略列表'
+                            )
+                            break
+            
+            # 从pending_entries中移除被忽略的应用
+            self.pending_entries = [e for e in self.pending_entries if e.get('selected', True)]
+            self._debounce_refresh()
+        
         self.ignore_mode = not self.ignore_mode
         self.ignore_btn.setText('Finish Selection' if self.ignore_mode else 'Select ignored apps')
         for card in self._cards:

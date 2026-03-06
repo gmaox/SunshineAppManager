@@ -6,6 +6,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 import os
+import subprocess
+import sys
 import basic_def
 
 
@@ -97,6 +99,7 @@ class SettingsPage(QWidget):
         
         # 3. 文件选择器（工作路径）
         work_path_layout = QHBoxLayout()
+        work_path_layout.setSpacing(5)
         work_path_label = QLabel("工作路径：")
         work_path_label.setFont(QFont("Segoe UI", 12))
         self.work_path_input = QLineEdit()
@@ -109,17 +112,32 @@ class SettingsPage(QWidget):
                 self.work_path_input.setText(os.path.normpath(basic_def.folder))
         except Exception:
             pass
-
-        work_path_btn = QPushButton("浏览")
+        work_path_open_btn = QPushButton("浏览")
+        work_path_open_btn.setFixedWidth(50)
+        work_path_open_btn.setFixedHeight(34)
+        work_path_open_btn.setStyleSheet(
+            "QPushButton{ background-color:#2E7D9B; color:white; border:none; border-radius:6px; padding:0px;}"
+            "QPushButton:hover{ background-color:#256070;}"
+        )
+        work_path_open_btn.clicked.connect(self.on_open_work_path)
+        self.work_path_open_btn = work_path_open_btn
+        work_path_btn = QPushButton("选择文件夹")
         work_path_btn.setFixedWidth(100)
         work_path_btn.setFixedHeight(34)
         work_path_btn.setStyleSheet(
             "QPushButton{ background-color:#2E7D9B; color:white; border:none; border-radius:6px; padding:6px 12px;}"
             "QPushButton:hover{ background-color:#256070;}"
         )
+        # 创建按钮布局，减小按钮间距
+        work_path_buttons_layout = QHBoxLayout()
+        work_path_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        work_path_buttons_layout.setSpacing(5)
+        work_path_buttons_layout.addWidget(work_path_open_btn)
+        work_path_buttons_layout.addWidget(work_path_btn)
+        
         work_path_layout.addWidget(work_path_label)
         work_path_layout.addWidget(self.work_path_input)
-        work_path_layout.addWidget(work_path_btn)
+        work_path_layout.addLayout(work_path_buttons_layout)
         settings_layout.addLayout(work_path_layout)
         
         # 4. 文件选择器（配置文件）
@@ -282,3 +300,24 @@ class SettingsPage(QWidget):
                 basic_def.save_config()
         except Exception as e:
             print(f"选择工作路径失败: {e}")
+
+    def on_open_work_path(self):
+        """打开工作路径文件夹"""
+        try:
+            work_path = basic_def.folder
+            if not work_path:
+                print("工作路径未设置")
+                return
+            
+            # 将正斜杠转换为反斜杠（Windows路径格式）
+            work_path = os.path.normpath(work_path)
+            
+            if not os.path.isdir(work_path):
+                print(f"工作路径不存在: {work_path}")
+                return
+            
+            # 根据操作系统打开文件夹
+            if sys.platform == 'win32':
+                os.startfile(work_path)
+        except Exception as e:
+            print(f"打开工作路径失败: {e}")

@@ -167,6 +167,11 @@ def save_config():
         # 优先使用运行时的 `folder_selected`，保持一致性
         if folder_selected:
             folder = folder_selected
+        
+        # 保留现有的设置
+        current_settings = dict(config['Settings']) if config.has_section('Settings') else {}
+        
+        # 更新设置
         config['Settings'] = {
             'folder_selected': folder,
             # 确保以字符串形式写入配置文件，避免 configparser 在不同环境下解析不一致
@@ -179,6 +184,11 @@ def save_config():
             # 新增 auto_delete_orphaned_entries
             'auto_delete_orphaned_entries': str(auto_delete_orphaned_entries)
         }
+        
+        # 保留 ignored_apps 如果存在
+        if 'ignored_apps' in current_settings:
+            config.set('Settings', 'ignored_apps', current_settings['ignored_apps'])
+        
         # 显式使用 UTF-8 编码写入，确保跨平台和 BOM 行为一致
         with open(config_file_path, 'w', encoding='utf-8') as configfile:
             config.write(configfile)
@@ -1191,8 +1201,6 @@ def generate_covers_for_entries(pending_entries, output_folder, progress_callbac
     _emit("finished", message="Cover generation completed")
     return image_target_paths, need_choose_cover_names
 
-from confirm_add_window import ConfirmAddWindow
-
 
 def runtomain():
     """
@@ -1245,6 +1253,15 @@ def runtomain():
     # 构造待添加的快捷方式列表（不写入 apps.json，只做预览）
     pending_entries = []
 
+    # 加载忽略列表
+    import json
+    ignored_apps_str = config.get('Settings', 'ignored_apps', fallback='[]')
+    try:
+        ignored_apps = json.loads(ignored_apps_str)
+    except json.JSONDecodeError:
+        ignored_apps = []
+    ignored_paths = [app.get('path') for app in ignored_apps]
+
     # 当前目录下的 .lnk
     for lnk in lnk_files:
         base_name = os.path.splitext(lnk)[0]
@@ -1255,6 +1272,12 @@ def runtomain():
         except Exception as e:
             print(f"获取 {lnk} 目标路径失败: {e}")
             continue
+        
+        # 检查是否在忽略列表中
+        if target_path in ignored_paths:
+            print(f"跳过被忽略的应用: {base_name} ({target_path})")
+            continue
+            
         image_index = find_unused_index(apps_json, [])
         pending_entries.append({
             "app_name": base_name,
@@ -1269,6 +1292,12 @@ def runtomain():
         base_name = os.path.splitext(url_file)[0]
         if base_name in existing_names:
             continue
+        
+        # 检查是否在忽略列表中
+        if target_path in ignored_paths:
+            print(f"跳过被忽略的应用: {base_name} ({target_path})")
+            continue
+            
         image_index = find_unused_index(apps_json, [])
         pending_entries.append({
             "app_name": base_name,
@@ -1286,14 +1315,34 @@ def runtomain():
         return
     
     # 通过 main window 显示确认窗口
-    main_window.show_confirm_add_window(
-        pending_entries=pending_entries,
-        apps_json=apps_json,
-        apps_json_path=apps_json_path,
-        output_folder=output_folder,
-        pseudo_sorting_enabled=pseudo_sorting_enabled,
-        close_after_completion=close_after_completion
-    )
+    # 延迟导入以避免循环导入
+    try:
+        from confirm_add_window import ConfirmAddWindow
+    except ImportError:
+        ConfirmAddWindow = None
+    
+    if ConfirmAddWindow is None:
+        return
+    
+    # 获取主窗口实例并显示确认窗口
+    from PyQt5.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app:
+        main_window = None
+        for widget in app.topLevelWidgets():
+            if hasattr(widget, 'show_confirm_add_window'):
+                main_window = widget
+                break
+        
+        if main_window:
+            main_window.show_confirm_add_window(
+                pending_entries=pending_entries,
+                apps_json=apps_json,
+                apps_json_path=apps_json_path,
+                output_folder=output_folder,
+                pseudo_sorting_enabled=pseudo_sorting_enabled,
+                close_after_completion=close_after_completion
+            )
 
 
 def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):

@@ -244,5 +244,14 @@ class AddGameWindow(QWidget):
             lines.append(f"有 {error_count} 个文件处理失败，请查看日志页。")
         lines.append(f"工作文件夹: {result.get('work_folder', '')}")
 
-        QMessageBox.information(self, '拖入添加完成', '\n'.join(lines))
+        # 用成功通知代替阻塞对话框
+        from PyQt5.QtWidgets import QApplication
+        app = QApplication.instance()
+        msg = '\n'.join(lines)
+        if app:
+            for w in app.topLevelWidgets():
+                if hasattr(w, 'log_tab'):
+                    w.log_tab.show_success_notification(msg)
+                    break
+
         event.acceptProposedAction()

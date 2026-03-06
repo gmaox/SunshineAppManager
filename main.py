@@ -33,11 +33,11 @@ try:
 except Exception:
     ConfirmAddWindow = None
 
-# 嵌入 runtomain
+# 嵌入忽略列表管理
 try:
-    from basic_def import runtomain
+    from ignore_manager import IgnoreManager
 except Exception:
-    runtomain = None
+    IgnoreManager = None
 
 
 # 日志信号发射器
@@ -298,6 +298,88 @@ class LogTab(QWidget):
         self.close_anim_group.finished.connect(lambda: notification.hide())
         self.close_anim_group.start()
 
+    def show_success_notification(self, message_text):
+        """在窗口右下角显示成功通知（绿色）"""
+        if not self.parent_window:
+            return
+        
+        # 创建或获取通知容器
+        if not hasattr(self.parent_window, 'success_notification'):
+            notification = QWidget(self.parent_window)
+            notification.setStyleSheet(
+                "QWidget {background-color: #ccffcc; border: 2px solid #00aa00; "
+                "padding: 8px; border-radius: 5px;}"
+            )
+            layout = QHBoxLayout()
+            layout.setContentsMargins(10, 8, 5, 8)
+            layout.setSpacing(10)
+            text_label = QLabel()
+            text_label.setFont(QFont("Segoe UI", 10))
+            text_label.setStyleSheet("color: #006600; background: transparent; border: none;")
+            text_label.setWordWrap(True)
+            notification.text_label = text_label
+            layout.addWidget(text_label)
+            close_btn = QPushButton("✕")
+            close_btn.setStyleSheet(
+                "QPushButton {background: transparent; border: none; color: #006600; font-weight: bold; font-size: 14px; padding: 0px;}"
+                "QPushButton:hover {color: #00aa00;}"
+            )
+            close_btn.setFixedSize(20, 20)
+            close_btn.clicked.connect(lambda: self.close_success_notification_with_animation())
+            layout.addWidget(close_btn)
+            notification.setLayout(layout)
+            notification.setWindowOpacity(0)
+            self.parent_window.success_notification = notification
+            if not hasattr(self.parent_window, 'success_notification_timer'):
+                self.parent_window.success_notification_timer = QTimer(self.parent_window)
+                self.parent_window.success_notification_timer.timeout.connect(
+                    lambda: self.close_success_notification_with_animation()
+                )
+        
+        notification = self.parent_window.success_notification
+        display_text = message_text[:100] + "..." if len(message_text) > 100 else message_text
+        notification.text_label.setText(f"✅ 成功：{display_text}")
+        rect = self.parent_window.rect()
+        notification_width = notification.sizeHint().width() + 20
+        notification_height = notification.sizeHint().height() + 20
+        pos_x = rect.right() - notification_width - 15
+        pos_y = rect.bottom() - notification_height - 15
+        start_x = rect.right() + 20
+        notification.setGeometry(start_x, pos_y, notification_width, notification_height)
+        notification.show()
+        self.show_notification_animation(notification, start_x, pos_x, pos_y, notification_width, notification_height)
+        self.parent_window.success_notification_timer.stop()
+        self.parent_window.success_notification_timer.start(3000)
+
+    def close_success_notification_with_animation(self):
+        """关闭成功通知的动画"""
+        if not self.parent_window or not hasattr(self.parent_window, 'success_notification'):
+            return
+        notification = self.parent_window.success_notification
+        if notification.isHidden():
+            return
+        if hasattr(self.parent_window, 'success_notification_timer'):
+            self.parent_window.success_notification_timer.stop()
+        rect = self.parent_window.rect()
+        current_g = notification.geometry()
+        opacity_anim = QPropertyAnimation(notification, b"windowOpacity")
+        opacity_anim.setDuration(400)
+        opacity_anim.setStartValue(1)
+        opacity_anim.setEndValue(0)
+        opacity_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        end_x = rect.right() + 20
+        pos_anim = QPropertyAnimation(notification, b"geometry")
+        pos_anim.setDuration(400)
+        pos_anim.setStartValue(current_g)
+        pos_anim.setEndValue(QRect(end_x, current_g.y(), current_g.width(), current_g.height()))
+        pos_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        if not hasattr(self, 'close_anim_group') or self.close_anim_group is None:
+            self.close_anim_group = QParallelAnimationGroup()
+        self.close_anim_group.clear()
+        self.close_anim_group.addAnimation(opacity_anim)
+        self.close_anim_group.addAnimation(pos_anim)
+        self.close_anim_group.finished.connect(lambda: notification.hide())
+        self.close_anim_group.start()
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -364,12 +446,18 @@ class MainWindow(QMainWindow):
             elif i == 2:
                 # 日志标签页
                 log_tab = LogTab(self)
+                self.log_tab = log_tab  # keep reference for notifications
                 v.addWidget(log_tab)
             elif i == 3 and SettingsPage is not None:
                 # 设置标签页
                 settings_widget = SettingsPage()
                 settings_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
                 v.addWidget(settings_widget)
+            elif i == 4 and IgnoreManager is not None:
+                # 忽略列表标签页
+                ignore_widget = IgnoreManager()
+                ignore_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                v.addWidget(ignore_widget)
             else:
                 # 其他标签页 - 显示占位符
                 label = QLabel(f"这是标签页{i+1}的内容")
