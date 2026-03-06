@@ -4,7 +4,7 @@ import json
 import threading
 import uuid
 from PyQt5 import QtWidgets, QtGui, QtCore
-from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, generate_covers_for_entries
+from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, generate_covers_for_entries, TEMP_COVERS_DIR
 
 
 class ConfirmAddWindow(QtWidgets.QWidget):
@@ -265,7 +265,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             self._rebuild_cards()
 
     def _on_import_cover(self, entry):
-        """导入图像按钮：选择并导入自定义封面"""
+        """导入图像按钮：选择并导入自定义封面（先保存到 temp 目录）"""
         fp, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "选择封面图片", "", "图片 (*.jpg *.jpeg *.png *.bmp)"
         )
@@ -278,11 +278,11 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             img = Image.open(fp)
             img = img.resize((600, 900), Image.LANCZOS)
 
-            covers_dir = os.path.join(self.output_folder)
-            os.makedirs(covers_dir, exist_ok=True)
+            # 先保存到 temp 目录
+            os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
 
             newname = f"custom_{uuid.uuid4().hex[:8]}.jpg"
-            output_path = os.path.join(covers_dir, newname)
+            output_path = os.path.join(TEMP_COVERS_DIR, newname)
             img.save(output_path, "JPEG", quality=95)
 
             entry["cover_path"] = output_path

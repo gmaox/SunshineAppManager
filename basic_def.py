@@ -15,9 +15,14 @@ config = configparser.ConfigParser()
 if getattr(sys, 'frozen', False):
     # 打包后的可执行文件：使用可执行文件所在目录
     config_file_path = os.path.join(os.path.dirname(sys.executable), 'config.ini')
+    SCRIPT_DIR = os.path.dirname(sys.executable)
 else:
     # 开发环境：使用当前模块文件所在目录下的 config.ini（绝对路径）
     config_file_path = os.path.join(os.path.dirname(__file__), 'config.ini')
+    SCRIPT_DIR = os.path.dirname(__file__)
+
+# 脚本目录下的 temp 文件夹，用于暂存封面文件
+TEMP_COVERS_DIR = os.path.join(SCRIPT_DIR, 'temp')
 hidden_files = []
 skipped_entries = []
 folder_selected = ''
@@ -83,6 +88,25 @@ def save_apps_json(apps_json, file_path):
     # 将更新后的 apps.json 保存到文件
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(apps_json, f, ensure_ascii=False, indent=4)
+    
+    # 将 temp 目录中的所有封面文件一起写入到目标目录
+    if os.path.exists(TEMP_COVERS_DIR):
+        try:
+            covers_target_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
+            os.makedirs(covers_target_dir, exist_ok=True)
+            
+            for filename in os.listdir(TEMP_COVERS_DIR):
+                src_path = os.path.join(TEMP_COVERS_DIR, filename)
+                dst_path = os.path.join(covers_target_dir, filename)
+                if os.path.isfile(src_path):
+                    shutil.copy2(src_path, dst_path)
+                    print(f"已将封面文件 {filename} 写入目标目录")
+            
+            # 清空 temp 目录
+            shutil.rmtree(TEMP_COVERS_DIR)
+            print("已清空 temp 目录")
+        except Exception as e:
+            print(f"处理 temp 封面文件失败: {e}")
 def load_config():
     """加载配置文件并同步 `folder_selected` 变量"""
     global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries
@@ -233,15 +257,17 @@ def create_image_with_icon(exe_path, output_path ,idx):
 
             icon_width, icon_height = icon_img.size
             dominant_colors = get_dominant_colors(icon_img)
-            color1, color2 = dominant_colors[0], dominant_colors[1]
+            # 将两个主要颜色调暗30%
+            color1 = tuple(int(c * 0.7) for c in dominant_colors[0])
+            color2 = tuple(int(c * 0.7) for c in dominant_colors[1])
 
-            img = Image.new('RGBA', (600, 800), color=(255, 255, 255, 0))
+            img = Image.new('RGBA', (600, 900), color=(255, 255, 255, 0))
             draw = ImageDraw.Draw(img)
 
-            for y in range(800):
+            for y in range(900):
                 for x in range(600):
                     ratio_x = x / 600
-                    ratio_y = y / 800
+                    ratio_y = y / 900
                     ratio = (ratio_x + ratio_y) / 2
                     r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
                     g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
@@ -249,7 +275,7 @@ def create_image_with_icon(exe_path, output_path ,idx):
                     draw.point((x, y), fill=(r, g, b, 255))
 
             icon_x = (600 - icon_width) // 2
-            icon_y = (800 - icon_height) // 2
+            icon_y = (900 - icon_height) // 2
             img.paste(icon_img, (icon_x, icon_y), icon_img.convert('RGBA'))
 
             img.save(output_path, format="PNG")
@@ -542,9 +568,14 @@ def generate_covers_for_entries(pending_entries, output_folder):
     返回值: (image_target_paths, need_choose_cover_names)
         - image_target_paths: [(shortcut_file, image_index), ...]
         - need_choose_cover_names: 需要进入 SGDB 封面选择流程的应用名列表
+    
+    注意：所有封面图片先写入 temp 目录，保存 apps.json 时再一起写入目标目录
     """
     image_target_paths = []
     need_choose_cover_names = []
+    
+    # 创建 temp 目录用于暂存封面
+    os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
 
     print("--------------------生成封面--------------------")
     for entry in pending_entries:
@@ -554,7 +585,7 @@ def generate_covers_for_entries(pending_entries, output_folder):
         image_index = entry["image_index"]
 
         # ========== 优先为 steam 游戏设置封面 ==========
-        cover_path = try_set_steam_cover_for_shortcut(app_name, shortcut_file, output_folder, image_index)
+        cover_path = try_set_steam_cover_for_shortcut(app_name, shortcut_file, TEMP_COVERS_DIR, image_index)
         if cover_path:
             image_target_paths.append((shortcut_file, image_index))
             entry["cover_path"] = cover_path
@@ -563,7 +594,7 @@ def generate_covers_for_entries(pending_entries, output_folder):
 
         # 使用图标生成封面
         image_target_paths.append((shortcut_file, image_index))
-        output_path = os.path.join(output_folder, f"output_image{image_index}.png")
+        output_path = os.path.join(TEMP_COVERS_DIR, f"output_image{image_index}.png")
         create_image_with_icon(target_path, output_path, image_index)
         entry["cover_path"] = output_path
         print(f"已生成封面: {app_name}")
@@ -662,11 +693,10 @@ def runtomain():
         })
 
     if not pending_entries:
-        QtWidgets.QMessageBox.information(
-            None,
-            "提示",
-            "没有检测到需要添加的新应用。"
-        )
+        # 模拟一个错误，使用stderr输出以触发错误通知
+        import sys
+        error_message = "没有检测到需要添加的新应用。"
+        print(f"Error: {error_message}", file=sys.stderr)
         return
     
     # 通过 main window 显示确认窗口
@@ -681,7 +711,7 @@ def runtomain():
 
 
 def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
-    """处理确认添加的条目，将其写入 apps.json"""
+    """处理确认添加的条目，将其写入 apps.json。temp 中的封面文件会在保存时自动写入目标目录"""
     global pseudo_sorting_enabled, close_after_completion
     
     # 将选中的条目写入 apps.json
@@ -700,7 +730,9 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
             entry["name"] = f"{idx:02d} {entry['name']}"
         print("已添加伪排序标志")
 
+    # 保存 apps.json（同时会将 temp 中的封面文件写入目标目录）
     save_apps_json(apps_json, apps_json_path)
+    
     restart_service()
 
     if close_after_completion:

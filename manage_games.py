@@ -5,7 +5,7 @@ import re, winreg
 import uuid
 from functools import partial
 from PyQt5 import QtWidgets, QtGui, QtCore
-from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json
+from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, TEMP_COVERS_DIR
 
 THUMB_SIZE = (80, 120)
 IMAGE_CACHE = {}
@@ -163,15 +163,18 @@ class EditGameCard(QtWidgets.QFrame):
         fp, _ = QtWidgets.QFileDialog.getOpenFileName(self, '选择封面图片', '', '图片 (*.jpg *.jpeg *.png *.bmp)')
         if not fp:
             return
-        covers_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
-        os.makedirs(covers_dir, exist_ok=True)
         try:
             from PIL import Image
             img = Image.open(fp)
             img = img.resize((600, 900), Image.LANCZOS)
+            
+            # 先写入到 temp 目录
+            os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
+            
             newname = f"custom_{uuid.uuid4().hex[:8]}.jpg"
-            full = os.path.join(covers_dir, newname)
-            img.save(full, 'JPEG', quality=95)
+            temp_path = os.path.join(TEMP_COVERS_DIR, newname)
+            img.save(temp_path, 'JPEG', quality=95)
+            
             self.entry['image-path'] = newname
             save_apps_json(self.apps_json, self.apps_json_path)
             IMAGE_CACHE.clear()  # clear cache so new thumb used
