@@ -79,6 +79,21 @@ class SettingsPage(QWidget):
         auto_save_layout.addWidget(self.auto_save_checkbox)
         auto_save_layout.addStretch()
         settings_layout.addLayout(auto_save_layout)
+        # 3. 自动删除不在工作目录中的条目（默认关闭）
+        orphan_cleanup_layout = QHBoxLayout()
+        orphan_cleanup_label = QLabel("自动删除孤立条目：")
+        orphan_cleanup_label.setFont(QFont("Segoe UI", 12))
+        self.orphan_cleanup_checkbox = QCheckBox()
+        self.orphan_cleanup_checkbox.setChecked(basic_def.auto_delete_orphaned_entries)
+        self.orphan_cleanup_checkbox.setStyleSheet(
+            "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
+            "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
+            "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
+        )
+        orphan_cleanup_layout.addWidget(orphan_cleanup_label)
+        orphan_cleanup_layout.addWidget(self.orphan_cleanup_checkbox)
+        orphan_cleanup_layout.addStretch()
+        settings_layout.addLayout(orphan_cleanup_layout)
         
         # 3. 文件选择器（工作路径）
         work_path_layout = QHBoxLayout()
@@ -224,9 +239,14 @@ class SettingsPage(QWidget):
         except Exception:
             pass
         try:
+            self.orphan_cleanup_checkbox.stateChanged.connect(self.on_orphan_cleanup_changed)
+        except Exception:
+            pass
+        try:
             self.work_path_btn.clicked.connect(self.on_browse_work_path)
         except Exception:
             pass
+
     def on_close_after_changed(self, state):
         # state: 0 or 2
         try:
@@ -242,6 +262,13 @@ class SettingsPage(QWidget):
         except Exception as e:
             print(f"保存 pseudo_sorting_enabled 失败: {e}")
 
+    def on_orphan_cleanup_changed(self, state):
+        try:
+            basic_def.auto_delete_orphaned_entries = bool(state)
+            basic_def.save_config()
+        except Exception as e:
+            print(f"保存 auto_delete_orphaned_entries 失败: {e}")
+
     def on_browse_work_path(self):
         try:
             dirname = QFileDialog.getExistingDirectory(self, "选择工作路径", basic_def.folder or os.path.expanduser("~"))
@@ -255,4 +282,3 @@ class SettingsPage(QWidget):
                 basic_def.save_config()
         except Exception as e:
             print(f"选择工作路径失败: {e}")
-

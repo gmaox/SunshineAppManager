@@ -332,18 +332,23 @@ def create_image_with_icon(exe_path, output_path ,idx):
             color1 = tuple(int(c * 0.7) for c in dominant_colors[0])
             color2 = tuple(int(c * 0.7) for c in dominant_colors[1])
 
-            img = Image.new('RGBA', (600, 900), color=(255, 255, 255, 0))
-            draw = ImageDraw.Draw(img)
-
-            for y in range(900):
-                for x in range(600):
-                    ratio_x = x / 600
-                    ratio_y = y / 900
-                    ratio = (ratio_x + ratio_y) / 2
+            # Use PIL native gradient composition instead of per-pixel Python loops.
+            # This greatly reduces CPU load and keeps UI responsive while covers are generated.
+            try:
+                gradient_mask = Image.linear_gradient('L').resize((600, 900))
+                bg_1 = Image.new('RGBA', (600, 900), color1 + (255,))
+                bg_2 = Image.new('RGBA', (600, 900), color2 + (255,))
+                img = Image.composite(bg_2, bg_1, gradient_mask)
+            except Exception:
+                # Fallback path for older PIL versions.
+                img = Image.new('RGBA', (600, 900), color=color1 + (255,))
+                draw = ImageDraw.Draw(img)
+                for y in range(900):
+                    ratio = y / 900
                     r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
                     g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
                     b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
-                    draw.point((x, y), fill=(r, g, b, 255))
+                    draw.line((0, y, 599, y), fill=(r, g, b, 255))
 
             icon_x = (600 - icon_width) // 2
             icon_y = (900 - icon_height) // 2
@@ -419,128 +424,87 @@ def add_entries_to_apps_json(valid_lnk_files, apps_json, modified_target_paths,i
             apps_json["apps"].append(app_entry)
             print(f"新加入: {lnk_file}")
 
+def _normalize_path(path):
+    return os.path.normcase(os.path.abspath(path))
+
+
+def _extract_shortcut_paths_from_entry(entry):
+    """Extract .lnk/.url paths from app entry cmd/detached fields."""
+    paths = []
+
+    cmd = entry.get("cmd")
+    if isinstance(cmd, str):
+        cmd_val = cmd.strip().strip('"')
+        if cmd_val.lower().endswith((".lnk", ".url")):
+            paths.append(cmd_val)
+    elif isinstance(cmd, (list, tuple)):
+        for item in cmd:
+            if isinstance(item, str):
+                cmd_val = item.strip().strip('"')
+                if cmd_val.lower().endswith((".lnk", ".url")):
+                    paths.append(cmd_val)
+
+    detached = entry.get("detached")
+    if isinstance(detached, (list, tuple)):
+        for item in detached:
+            if isinstance(item, str):
+                detached_val = item.strip().strip('"')
+                if detached_val.lower().endswith((".lnk", ".url")):
+                    paths.append(detached_val)
+
+    return paths
+
+
 def remove_entries_with_output_image(apps_json, base_names):
-    # 删除 apps.json 中包含 "output_image" 或"_SGDB"或"_library_600x900"的条目，且 cmd 和 detached 字段不在 base_names 中
-    
-    # 先找出需要删除的条目
+    """
+    删除由 QSAA 生成封面的孤立条目：
+    - 仅处理 image-path 含 output_image / _SGDB / _library_600x900 的条目
+    - 仅当该条目的快捷方式路径不在当前工作目录中时删除
+    功能由 auto_delete_orphaned_entries 开关控制（默认关闭）。
+    """
+    global auto_delete_orphaned_entries, folder_selected
+
+    if not auto_delete_orphaned_entries:
+        return
+
+    work_dir = folder_selected or ""
+    if not work_dir:
+        return
+    work_dir = _normalize_path(work_dir)
+
+    current_shortcut_paths = set()
+    for name in base_names:
+        if not isinstance(name, str) or not name:
+            continue
+        current_shortcut_paths.add(_normalize_path(os.path.join(work_dir, name)))
+
     entries_to_delete = []
-    for entry in apps_json['apps']:
-        if (("output_image" in entry.get("image-path", "") or
-             "_SGDB" in entry.get("image-path", "") or
-             "_library_600x900" in entry.get("image-path", ""))
-            and not (
-                (entry.get("cmd") and os.path.basename(entry["cmd"].strip('"')) in base_names) or 
-                (entry.get("detached") and any(os.path.basename(detached_item.strip('"')) in base_names for detached_item in entry["detached"]))
-            )):
+    for entry in apps_json.get('apps', []):
+        image_path = entry.get("image-path", "")
+        is_qsaa_cover = (
+            "output_image" in image_path or
+            "_SGDB" in image_path or
+            "_library_600x900" in image_path
+        )
+        if not is_qsaa_cover:
+            continue
+
+        shortcut_paths = _extract_shortcut_paths_from_entry(entry)
+        if not shortcut_paths:
+            continue
+
+        normalized_entry_paths = {_normalize_path(p) for p in shortcut_paths}
+        if normalized_entry_paths.isdisjoint(current_shortcut_paths):
             entries_to_delete.append(entry)
-    
-    # 如果没有需要删除的条目，直接返回
+
     if not entries_to_delete:
         return
-    
-    # 如果设置了自动删除，直接删除
-    global auto_delete_orphaned_entries
-    if auto_delete_orphaned_entries:
-        apps_json['apps'] = [
-            entry for entry in apps_json['apps'] 
-            if entry not in entries_to_delete
-        ]
-        print(f"已自动删除 {len(entries_to_delete)} 个不符合条件的条目")
-        return
-    
-    # 询问用户是否删除
-    deleted_entry_names = [entry.get("name", "未知") for entry in entries_to_delete]
-    entry_list = "\n".join([f"  - {name}" for name in deleted_entry_names[:10]])  # 最多显示10个
-    if len(deleted_entry_names) > 10:
-        entry_list += f"\n  ... 还有 {len(deleted_entry_names) - 10} 个条目"
-    
-    message = f"检测到 {len(entries_to_delete)} 个孤立的条目需要删除（对应的快捷方式已不存在）：\n\n{entry_list}\n\n是否删除这些条目？"
-    
-    # 创建自定义对话框
-    dialog_result = {"value": None}
-    
-    # 获取主窗口或创建临时窗口
-    parent_window = None
-    try:
-        # 尝试从全局命名空间获取 root
-        if 'root' in globals() and globals()['root']:
-            parent_window = globals()['root']
-    except:
-        pass
-    
-    # 如果无法获取主窗口，创建一个临时根窗口
-    temp_root = None
-    if not parent_window:
-        temp_root = tk.Tk()
-        temp_root.withdraw()
-        parent_window = temp_root
-    
-    dialog = tk.Toplevel(parent_window)
-    dialog.title("确认删除")
-    dialog.geometry("450x350")
-    dialog.attributes("-topmost", True)
-    if parent_window and parent_window != temp_root:
-        try:
-            dialog.transient(parent_window)
-        except:
-            pass
-    
-    # 居中显示
-    dialog.update_idletasks()
-    x = (dialog.winfo_screenwidth() // 2) - (450 // 2)
-    y = (dialog.winfo_screenheight() // 2) - (350 // 2)
-    dialog.geometry(f"450x350+{x}+{y}")
-    
-    tk.Label(dialog, text=message, wraplength=420, justify=tk.LEFT, padx=10, pady=10).pack()
-    
-    button_frame = tk.Frame(dialog)
-    button_frame.pack(pady=20)
-    
-    def delete_click():
-        dialog_result["value"] = "delete"
-        dialog.destroy()
-        if temp_root:
-            temp_root.destroy()
-    
-    def cancel_click():
-        dialog_result["value"] = "cancel"
-        dialog.destroy()
-        if temp_root:
-            temp_root.destroy()
-    
-    def ignore_click():
-        dialog_result["value"] = "ignore"
-        dialog.destroy()
-        if temp_root:
-            temp_root.destroy()
-    
-    tk.Button(button_frame, text="删除", command=delete_click, width=12, bg='#aaaaaa').pack(side=tk.LEFT, padx=5)
-    tk.Button(button_frame, text="取消", command=cancel_click, width=12, bg='#aaaaaa').pack(side=tk.LEFT, padx=5)
-    tk.Button(button_frame, text="忽略并记住", command=ignore_click, width=12, bg='#aaaaaa').pack(side=tk.LEFT, padx=5)
-    
-    dialog.protocol("WM_DELETE_WINDOW", cancel_click)
-    dialog.focus_force()
-    dialog.grab_set()  # 设置为模态对话框
-    dialog.wait_window()
-    if temp_root:
-        temp_root.update()
-    
-    # 处理用户选择
-    if dialog_result["value"] == "delete":
-        apps_json['apps'] = [
-            entry for entry in apps_json['apps'] 
-            if entry not in entries_to_delete
-        ]
-        print(f"已删除 {len(entries_to_delete)} 个不符合条件的条目")
-    elif dialog_result["value"] == "ignore":
-        # 设置自动删除标志，以后不再询问
-        auto_delete_orphaned_entries = True
-        save_config()
-        print("已设置自动删除孤立条目，以后将不再询问")
-    else:
-        # 取消删除
-        print("已取消删除操作")
 
+    apps_json['apps'] = [
+        entry for entry in apps_json['apps']
+        if entry not in entries_to_delete
+    ]
+    print(f"已自动删除 {len(entries_to_delete)} 个不在当前工作目录的条目")
 
 def get_url_files(include_hidden=False):
     # 获取当前工作目录下的所有 .url 文件
@@ -628,25 +592,11 @@ def initialize():
 
 def generate_covers_for_entries(pending_entries, output_folder):
     """
-    根据待添加条目的 exe / 图标，生成封面图片。
-
-    该方法只负责真正的磁盘 I/O 和图像处理，方便在 GUI 中异步调用。
-    pending_entries: 列表，每项至少包含
-        - app_name: 应用显示名
-        - shortcut_file: 快捷方式文件名 (.lnk / .url)
-        - target_path: exe 或 IconFile 路径
-        - image_index: 对应 output_image{index}.png 的索引
-    返回值: (image_target_paths, need_choose_cover_names)
-        - image_target_paths: [(shortcut_file, image_index), ...]
-        - need_choose_cover_names: 需要进入 SGDB 封面选择流程的应用名列表
-    
-    注意：所有封面图片先写入 temp 目录，保存 apps.json 时再一起写入目标目录
+    根据待添加条目的 exe / 图标，生成封面图片（内存模式）。
+    不再落地 temp 文件，统一存入 entry["cover_bytes"]。
     """
     image_target_paths = []
     need_choose_cover_names = []
-    
-    # 创建 temp 目录用于暂存封面
-    os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
 
     print("--------------------生成封面--------------------")
     for entry in pending_entries:
@@ -655,26 +605,27 @@ def generate_covers_for_entries(pending_entries, output_folder):
         target_path = entry["target_path"]
         image_index = entry["image_index"]
 
-        # ========== 优先为 steam 游戏设置封面 ==========
-        cover_path = try_set_steam_cover_for_shortcut(app_name, shortcut_file, TEMP_COVERS_DIR, image_index)
-        if cover_path:
-            image_target_paths.append((shortcut_file, image_index))
-            entry["cover_path"] = cover_path
-            print(f"已为Steam游戏 {app_name} 设置本地封面: {cover_path}")
+        image_target_paths.append((shortcut_file, image_index))
+        entry["image-path"] = f"output_image{image_index}.png"
+
+        # 优先尝试 Steam 本地封面（内存）
+        steam_cover_bytes = try_get_steam_cover_bytes_for_shortcut(app_name, shortcut_file)
+        if steam_cover_bytes:
+            entry["cover_bytes"] = steam_cover_bytes
+            print(f"已为Steam游戏 {app_name} 准备内存封面")
             continue
 
-        # 使用图标生成封面
-        image_target_paths.append((shortcut_file, image_index))
-        output_path = os.path.join(TEMP_COVERS_DIR, f"output_image{image_index}.png")
-        create_image_with_icon(target_path, output_path, image_index)
-        entry["cover_path"] = output_path
+        # 使用图标生成封面（内存）
+        from io import BytesIO
+        cover_buffer = BytesIO()
+        create_image_with_icon(target_path, cover_buffer, image_index)
+        cover_bytes = cover_buffer.getvalue()
+        if cover_bytes:
+            entry["cover_bytes"] = cover_bytes
         print(f"已生成封面: {app_name}")
         need_choose_cover_names.append(app_name)
 
     return image_target_paths, need_choose_cover_names
-
-
-
 
 from confirm_add_window import ConfirmAddWindow
 
@@ -782,15 +733,30 @@ def runtomain():
 
 
 def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
-    """处理确认添加的条目，将其写入 apps.json。temp 中的封面文件会在保存时自动写入目标目录"""
+    """处理确认添加的条目，将其写入 apps.json。内存封面会在此阶段写入目标目录。"""
     global pseudo_sorting_enabled, close_after_completion
-    
+
+    covers_target_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
+    os.makedirs(covers_target_dir, exist_ok=True)
+
     # 将选中的条目写入 apps.json
     for entry in selected_entries:
         shortcut_file = entry["shortcut_file"]
         image_index = entry["image_index"]
         app_entry = generate_app_entry(shortcut_file, image_index)
         if app_entry:
+            custom_image_path = entry.get("image-path")
+            if custom_image_path:
+                app_entry["image-path"] = custom_image_path
+
+            cover_bytes = entry.get("cover_bytes")
+            if cover_bytes:
+                cover_filename = app_entry.get("image-path")
+                if cover_filename:
+                    cover_full_path = os.path.join(covers_target_dir, cover_filename)
+                    with open(cover_full_path, "wb") as f:
+                        f.write(cover_bytes)
+
             apps_json["apps"].append(app_entry)
             print(f"新加入: {shortcut_file}")
 
@@ -801,14 +767,12 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
             entry["name"] = f"{idx:02d} {entry['name']}"
         print("已添加伪排序标志")
 
-    # 保存 apps.json（同时会将 temp 中的封面文件写入目标目录）
     save_apps_json(apps_json, apps_json_path)
-    
+
     restart_service()
 
     if close_after_completion:
         os._exit(0)
-
 
 def _runtomain_legacy(apps_json):
     """旧的对话框方式（当没有 main window 时使用）"""
@@ -887,4 +851,41 @@ def try_set_steam_cover_for_shortcut(app_name, target_path, output_dir, index):
         return output_path
     except Exception as e:
         print(f"拷贝Steam封面失败: {e}")
+        return None
+
+def try_get_steam_cover_bytes_for_shortcut(app_name, target_path):
+    """Return steam cover image bytes for shortcut if available, else None."""
+    import re
+    steamid = None
+    try:
+        if target_path.lower().endswith('.url') and os.path.exists(target_path):
+            with open(target_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.startswith("URL=") and "steam://rungameid/" in line:
+                        m = re.search(r'steam://rungameid/(\d+)', line)
+                        if m:
+                            steamid = m.group(1)
+                            break
+    except Exception as e:
+        print(f"检查steam快捷方式失败: {e}")
+        return None
+
+    if not steamid:
+        return None
+
+    steam_base_dir = get_steam_base_dir()
+    if not steam_base_dir:
+        return None
+
+    image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900.jpg"
+    if not os.path.exists(image_path):
+        image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900_schinese.jpg"
+        if not os.path.exists(image_path):
+            return None
+
+    try:
+        with open(image_path, 'rb') as f:
+            return f.read()
+    except Exception as e:
+        print(f"读取Steam封面失败: {e}")
         return None

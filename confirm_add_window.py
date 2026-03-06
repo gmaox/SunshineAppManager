@@ -4,7 +4,7 @@ import json
 import threading
 import uuid
 from PyQt5 import QtWidgets, QtGui, QtCore
-from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, generate_covers_for_entries, TEMP_COVERS_DIR
+from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, generate_covers_for_entries
 
 
 class ConfirmAddWindow(QtWidgets.QWidget):
@@ -246,6 +246,15 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
         return frame
 
+    def _set_cover_label_from_bytes(self, label, cover_bytes):
+        """Load cover from in-memory bytes to avoid temp-file dependency."""
+        if not label or not cover_bytes:
+            return
+        pix = QtGui.QPixmap()
+        if not pix.loadFromData(cover_bytes):
+            return
+        label.setPixmap(pix.scaled(80, 120, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+        label.setText("")
     # ========== 按钮事件处理 ==========
 
     def _on_left_clicked(self, entry):
@@ -264,8 +273,9 @@ class ConfirmAddWindow(QtWidgets.QWidget):
                 self.filtered_entries[idx + 1], self.filtered_entries[idx]
             self._rebuild_cards()
 
+
     def _on_import_cover(self, entry):
-        """导入图像按钮：选择并导入自定义封面（先保存到 temp 目录）"""
+        """导入图片按钮：选择并导入自定义封面（内存模式）。"""
         fp, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "选择封面图片", "", "图片 (*.jpg *.jpeg *.png *.bmp)"
         )
@@ -274,37 +284,25 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
         try:
             from PIL import Image
+            from io import BytesIO
 
             img = Image.open(fp)
             img = img.resize((600, 900), Image.LANCZOS)
 
-            # 先保存到 temp 目录
-            os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
-
             newname = f"custom_{uuid.uuid4().hex[:8]}.jpg"
-            output_path = os.path.join(TEMP_COVERS_DIR, newname)
-            img.save(output_path, "JPEG", quality=95)
+            buf = BytesIO()
+            img.save(buf, "JPEG", quality=95)
 
-            entry["cover_path"] = output_path
+            entry["cover_bytes"] = buf.getvalue()
             entry["image-path"] = newname
 
-            # 更新缩略图显示
             label = entry.get("_cover_label")
             if label:
-                img.thumbnail((80, 120))
-                data = img.tobytes("raw", "RGBA") if img.mode == "RGBA" else None
-                if not data:
-                    img = img.convert("RGBA")
-                    data = img.tobytes("raw", "RGBA")
-                qimg = QtGui.QImage(data, img.width, img.height, QtGui.QImage.Format_RGBA8888)
-                pix = QtGui.QPixmap.fromImage(qimg)
-                label.setPixmap(pix.scaled(80, 120, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-                label.setText("")
+                self._set_cover_label_from_bytes(label, entry.get("cover_bytes"))
 
             QtWidgets.QMessageBox.information(self, "成功", "封面导入成功")
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "错误", f"导入封面失败: {e}")
-
     def _on_edit_name(self, entry):
         """修复名称按钮：编辑游戏名称"""
         dlg = QtWidgets.QDialog(self)
@@ -383,27 +381,11 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         # 更新卡片上的封面缩略图
         for entry in self.pending_entries:
             label = entry.get("_cover_label")
-            cover_path = entry.get("cover_path")
-
-            if not label or not cover_path or not os.path.exists(cover_path):
-                continue
-
+            cover_bytes = entry.get("cover_bytes")
             try:
-                from PIL import Image
-
-                img = Image.open(cover_path)
-                img.thumbnail((80, 120))
-                data = img.tobytes("raw", "RGBA") if img.mode == "RGBA" else None
-                if not data:
-                    img = img.convert("RGBA")
-                    data = img.tobytes("raw", "RGBA")
-                qimg = QtGui.QImage(data, img.width, img.height, QtGui.QImage.Format_RGBA8888)
-                pix = QtGui.QPixmap.fromImage(qimg)
-                label.setPixmap(pix.scaled(80, 120, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-                label.setText("")
+                self._set_cover_label_from_bytes(label, cover_bytes)
             except Exception:
                 pass
-
     # ========== 交互逻辑 ==========
 
     def _apply_filter(self):
