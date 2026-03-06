@@ -6,6 +6,7 @@ import uuid
 from functools import partial
 from PyQt5 import QtWidgets, QtGui, QtCore
 from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, TEMP_COVERS_DIR
+from sgdb_cover_window import choose_cover_with_sgdb_qt
 
 THUMB_SIZE = (80, 120)
 IMAGE_CACHE = {}
@@ -55,6 +56,8 @@ class EditGameCard(QtWidgets.QFrame):
         self.cover_lbl.setFixedSize(80, 120)
         self.cover_lbl.setStyleSheet('background:#333;color:white')
         self.cover_lbl.setAlignment(QtCore.Qt.AlignCenter)
+        self.cover_lbl.setCursor(QtCore.Qt.PointingHandCursor)  # 设置鼠标指针为手型
+        self.cover_lbl.mousePressEvent = self.on_cover_click  # 连接点击事件
         h.addWidget(self.cover_lbl)
 
         # info
@@ -99,6 +102,10 @@ class EditGameCard(QtWidgets.QFrame):
         self.del_btn.clicked.connect(self.on_delete)
         self.edit_btn.clicked.connect(self.on_edit)
         self.cover_btn.clicked.connect(self.on_change_cover)
+
+    def on_cover_click(self, event):
+        """点击封面时使用 SGDB 选择封面"""
+        self._change_cover_with_sgdb()
 
     def on_delete(self):
         name = self.entry.get('name', '未知游戏')
@@ -181,6 +188,30 @@ class EditGameCard(QtWidgets.QFrame):
             self.refresh_cb()
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, '错误', f'更换封面失败: {e}')
+
+    def _change_cover_with_sgdb(self):
+        """使用 SGDB 选择封面"""
+        app_name = self.entry.get('name', '未知游戏')
+        exe_path = self.entry.get('cmd', '')
+        
+        # 确定输出路径
+        os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
+        newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
+        output_path = os.path.join(TEMP_COVERS_DIR, newname)
+        
+        result_path, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
+            app_name=app_name,
+            output_path=output_path,
+            exe_path=exe_path
+        )
+        
+        if result_path:
+            self.entry['image-path'] = newname
+            if sgdb_name:
+                self.entry['name'] = sgdb_name  # 更新名称如果选择了应用 SGDB 名称
+            save_apps_json(self.apps_json, self.apps_json_path)
+            IMAGE_CACHE.clear()
+            self.refresh_cb()
 
 
 class ManageWindow(QtWidgets.QWidget):

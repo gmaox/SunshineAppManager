@@ -6,6 +6,7 @@ from io import BytesIO
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from basic_def import generate_covers_for_entries
+from sgdb_cover_window import choose_cover_with_sgdb_qt
 
 THUMB_SIZE = (80, 120)
 
@@ -28,6 +29,8 @@ class ConfirmGameCard(QtWidgets.QFrame):
         self.cover_lbl.setFixedSize(80, 120)
         self.cover_lbl.setAlignment(QtCore.Qt.AlignCenter)
         self.cover_lbl.setStyleSheet('background:#333;color:white')
+        self.cover_lbl.setCursor(QtCore.Qt.PointingHandCursor)  # 设置鼠标指针为手型
+        self.cover_lbl.mousePressEvent = self.on_cover_click  # 连接点击事件
         h.addWidget(self.cover_lbl)
 
         v = QtWidgets.QVBoxLayout()
@@ -110,6 +113,44 @@ class ConfirmGameCard(QtWidgets.QFrame):
             pix.scaled(THUMB_SIZE[0], THUMB_SIZE[1], QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
         )
         self.cover_lbl.setText('')
+
+    def on_cover_click(self, event):
+        """点击封面时使用 SGDB 选择封面"""
+        self._change_cover_with_sgdb()
+
+    def _change_cover_with_sgdb(self):
+        """使用 SGDB 选择封面"""
+        app_name = self.entry.get('app_name', 'Unknown')
+        exe_path = self.entry.get('target_path', '')
+        
+        # 确定输出路径
+        from basic_def import TEMP_COVERS_DIR
+        import os
+        os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
+        newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
+        output_path = os.path.join(TEMP_COVERS_DIR, newname)
+        
+        result_path, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
+            app_name=app_name,
+            output_path=output_path,
+            exe_path=exe_path
+        )
+        
+        if result_path:
+            try:
+                from PIL import Image
+                img = Image.open(result_path)
+                img = img.resize((600, 900), Image.LANCZOS)
+                buf = BytesIO()
+                img.save(buf, 'JPEG', quality=95)
+                
+                self.entry['cover_bytes'] = buf.getvalue()
+                self.entry['image-path'] = newname
+                if sgdb_name:
+                    self.entry['app_name'] = sgdb_name  # 更新名称如果选择了应用 SGDB 名称
+                self.parent_window._refresh_entry_card(self.entry)
+            except Exception as e:
+                QtWidgets.QMessageBox.critical(self, 'Error', f'Failed to process SGDB cover: {e}')
 
 
 class ConfirmAddWindow(QtWidgets.QWidget):
