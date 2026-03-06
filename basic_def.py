@@ -612,41 +612,545 @@ def initialize():
     apps_json_path = f"{APP_INSTALL_PATH}\\config\\apps.json"  # 修改为你的 apps.json 文件路径
     print(f"该应用会使用《{output_folder}》文件夹来存放输出的图像\n修改以下文件《{apps_json_path}》来添加sunshine应用程序")
 
-def generate_covers_for_entries(pending_entries, output_folder):
+SGDB_API_BASE_URL = "https://www.steamgriddb.com/api/v2"
+DEFAULT_SGDB_API_KEY = "1b378d4482f7088146d2f7e320139b74"
+
+
+def _normalize_name_for_match(name):
+    text = str(name or "").lower().strip()
+    text = re.sub(r"[\W_]+", " ", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _collect_cover_search_terms(app_name, target_path, shortcut_file):
+    terms = []
+    seen = set()
+
+    def _push(value):
+        if not isinstance(value, str):
+            return
+        value = value.strip().strip('"').strip("'")
+        if not value:
+            return
+        norm = _normalize_name_for_match(value)
+        if not norm or norm in seen:
+            return
+        seen.add(norm)
+        terms.append(value)
+
+    _push(app_name)
+    if shortcut_file:
+        _push(os.path.splitext(os.path.basename(shortcut_file))[0])
+
+    cleaned_target = str(target_path or "").strip().strip('"')
+    if cleaned_target:
+        _push(os.path.splitext(os.path.basename(cleaned_target))[0])
+        _push(os.path.basename(os.path.dirname(cleaned_target)))
+
+    return terms[:4]
+
+
+class SteamGridDBApiClient:
+    def __init__(self, api_key, timeout=(8, 20), use_system_proxy=False, proxy_url=""):
+        self.base_url = SGDB_API_BASE_URL
+        self.timeout = timeout
+        self.session = requests.Session()
+        # Avoid inheriting a broken OS/env proxy by default.
+        self.session.trust_env = bool(use_system_proxy)
+        if proxy_url:
+            self.session.proxies.update({
+                "http": proxy_url,
+                "https": proxy_url
+            })
+        self.session.headers.update({
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+            "User-Agent": "Steam-ROM-Manager/2.5 (QSAA)"
+        })
+        self._search_cache = {}
+        self._grids_cache = {}
+
+    def _request(self, url, timeout=None):
+        last_error = None
+        request_timeout = timeout or self.timeout
+
+        for attempt in range(3):
+            try:
+                response = self.session.get(url, timeout=request_timeout)
+                response.raise_for_status()
+                return response
+            except requests.exceptions.ProxyError as e:
+                last_error = e
+                # First fallback: explicit proxy misconfigured -> clear it.
+                if attempt == 0 and self.session.proxies:
+                    self.session.proxies.clear()
+                    continue
+                # Second fallback: env proxy misconfigured -> bypass env.
+                if attempt <= 1 and self.session.trust_env:
+                    self.session.trust_env = False
+                    continue
+                raise
+            except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout) as e:
+                last_error = e
+                if attempt < 2:
+                    time.sleep(0.4 * (attempt + 1))
+                    continue
+                raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("SGDB request failed unexpectedly")
+
+    def search_game(self, name):
+        query = (name or "").strip()
+        if not query:
+            return []
+
+        cache_key = _normalize_name_for_match(query)
+        if cache_key in self._search_cache:
+            return self._search_cache[cache_key]
+
+        from urllib.parse import quote
+        url = f"{self.base_url}/search/autocomplete/{quote(query)}"
+        response = self._request(url, timeout=(8, 25))
+        payload = response.json() if response.content else {}
+        data = payload.get("data") if isinstance(payload, dict) else []
+        games = data if isinstance(data, list) else []
+        self._search_cache[cache_key] = games
+        return games
+
+    def get_grids(self, game_id):
+        if not game_id:
+            return []
+
+        gid = int(game_id)
+        if gid in self._grids_cache:
+            return self._grids_cache[gid]
+
+        url = f"{self.base_url}/grids/game/{gid}?types=static&dimensions=600x900"
+        response = self._request(url, timeout=(8, 25))
+        payload = response.json() if response.content else {}
+        data = payload.get("data") if isinstance(payload, dict) else []
+        grids = data if isinstance(data, list) else []
+        self._grids_cache[gid] = grids
+        return grids
+
+
+def _get_sgdb_api_key():
+    env_key = os.environ.get("QSAA_SGDB_API_KEY") or os.environ.get("STEAMGRIDDB_API_KEY")
+    if env_key and env_key.strip():
+        return env_key.strip()
+
+    try:
+        cfg_key = config.get("Settings", "sgdb_api_key", fallback="").strip()
+        if cfg_key:
+            return cfg_key
+    except Exception:
+        pass
+
+    return DEFAULT_SGDB_API_KEY
+
+
+def _get_sgdb_network_options():
+    # Default to direct connection to avoid broken system proxy variables.
+    use_system_proxy = False
+    explicit_proxy = ""
+
+    env_use_system = os.environ.get("QSAA_SGDB_USE_SYSTEM_PROXY", "").strip().lower()
+    if env_use_system in ("1", "true", "yes", "on"):
+        use_system_proxy = True
+
+    env_proxy = os.environ.get("QSAA_SGDB_PROXY", "").strip()
+    if env_proxy:
+        explicit_proxy = env_proxy
+
+    return {
+        "use_system_proxy": use_system_proxy,
+        "proxy_url": explicit_proxy
+    }
+
+
+def _score_sgdb_candidate(query_name, app_name, candidate_name):
+    from difflib import SequenceMatcher
+
+    candidate_norm = _normalize_name_for_match(candidate_name)
+    if not candidate_norm:
+        return 0.0
+
+    best = 0.0
+    for source in (query_name, app_name):
+        source_norm = _normalize_name_for_match(source)
+        if not source_norm:
+            continue
+
+        if source_norm == candidate_norm:
+            score = 1.0
+        elif source_norm.startswith(candidate_norm) or candidate_norm.startswith(source_norm):
+            score = 0.96
+        else:
+            score = SequenceMatcher(None, source_norm, candidate_norm).ratio()
+
+        source_tokens = set(source_norm.split())
+        candidate_tokens = set(candidate_norm.split())
+        overlap = source_tokens.intersection(candidate_tokens)
+        if overlap:
+            score += min(0.08, 0.02 * len(overlap))
+
+        if score > best:
+            best = score
+
+    return min(best, 1.0)
+
+
+def _pick_best_sgdb_game(sgdb_client, app_name, target_path, shortcut_file):
+    terms = _collect_cover_search_terms(app_name, target_path, shortcut_file)
+    if not terms:
+        return None
+
+    best_game = None
+    best_score = 0.0
+    seen_game_ids = set()
+
+    for term in terms:
+        games = sgdb_client.search_game(term)
+        if not games:
+            continue
+
+        for rank, game in enumerate(games[:12]):
+            if not isinstance(game, dict):
+                continue
+            game_id = game.get("id")
+            if not game_id or game_id in seen_game_ids:
+                continue
+            seen_game_ids.add(game_id)
+
+            score = _score_sgdb_candidate(term, app_name, game.get("name", ""))
+            score -= rank * 0.01
+            if score > best_score:
+                best_score = score
+                best_game = game
+
+        if best_score >= 0.995:
+            break
+
+    return best_game
+
+
+def _pick_best_sgdb_grid(grids):
+    candidates = [g for g in grids if isinstance(g, dict) and (g.get("url") or g.get("thumb"))]
+    if not candidates:
+        return None
+
+    target_ratio = 600.0 / 900.0
+
+    def _sort_key(grid):
+        width = int(grid.get("width") or 0)
+        height = int(grid.get("height") or 0)
+        if width > 0 and height > 0:
+            ratio_penalty = abs((width / float(height)) - target_ratio)
+        else:
+            ratio_penalty = 1.0
+
+        raw_score = grid.get("score")
+        try:
+            score_value = float(raw_score) if raw_score is not None else 0.0
+        except (TypeError, ValueError):
+            score_value = 0.0
+
+        return (ratio_penalty, -score_value)
+
+    candidates.sort(key=_sort_key)
+    return candidates[0]
+
+
+def _download_sgdb_cover_bytes(url, sgdb_client):
+    if not url:
+        return None
+
+    # Use a separate session for CDN image download and do NOT send API Authorization header.
+    image_session = requests.Session()
+    image_session.trust_env = sgdb_client.session.trust_env
+    if sgdb_client.session.proxies:
+        image_session.proxies.update(sgdb_client.session.proxies)
+    image_session.headers.update({
+        "User-Agent": sgdb_client.session.headers.get("User-Agent", "QSAA"),
+        "Accept": "image/*,*/*;q=0.8",
+        "Referer": "https://www.steamgriddb.com/"
+    })
+
+    last_error = None
+    raw_bytes = None
+    for attempt in range(3):
+        try:
+            response = image_session.get(url, timeout=(8, 30))
+            response.raise_for_status()
+            raw_bytes = response.content
+            break
+        except requests.exceptions.ProxyError as e:
+            last_error = e
+            if attempt == 0 and image_session.proxies:
+                image_session.proxies.clear()
+                continue
+            if attempt <= 1 and image_session.trust_env:
+                image_session.trust_env = False
+                continue
+            raise
+        except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout) as e:
+            last_error = e
+            if attempt < 2:
+                time.sleep(0.4 * (attempt + 1))
+                continue
+            raise
+
+    if raw_bytes is None:
+        if last_error:
+            raise last_error
+        return None
+
+    if not raw_bytes:
+        return None
+
+    try:
+        with Image.open(BytesIO(raw_bytes)) as image:
+            image = image.convert("RGB")
+            if image.size != (600, 900):
+                image = image.resize((600, 900), Image.LANCZOS)
+
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=95)
+            return output.getvalue()
+    except Exception:
+        return raw_bytes
+
+
+def try_get_sgdb_cover_bytes_for_entry(app_name, target_path, shortcut_file, sgdb_client=None):
+    api = sgdb_client
+    if api is None:
+        api_key = _get_sgdb_api_key()
+        if not api_key:
+            return None
+        net_options = _get_sgdb_network_options()
+        api = SteamGridDBApiClient(
+            api_key,
+            use_system_proxy=net_options["use_system_proxy"],
+            proxy_url=net_options["proxy_url"]
+        )
+
+    best_game = _pick_best_sgdb_game(api, app_name, target_path, shortcut_file)
+    if not best_game:
+        return None
+
+    game_id = best_game.get("id")
+    grids = api.get_grids(game_id)
+    best_grid = _pick_best_sgdb_grid(grids)
+    if not best_grid:
+        return None
+
+    candidate_urls = [best_grid.get("url"), best_grid.get("thumb")]
+    tried = set()
+    for cover_url in candidate_urls:
+        if not cover_url or cover_url in tried:
+            continue
+        tried.add(cover_url)
+        try:
+            cover_bytes = _download_sgdb_cover_bytes(cover_url, api)
+            if cover_bytes:
+                return cover_bytes
+        except requests.HTTPError as e:
+            status = e.response.status_code if getattr(e, "response", None) is not None else None
+            print(f"SGDB 资源下载失败 ({status}) {app_name}: {e}")
+            continue
+        except Exception as e:
+            print(f"SGDB 资源下载异常 {app_name}: {e}")
+            continue
+
+    return None
+
+
+def generate_covers_for_entries(pending_entries, output_folder, progress_callback=None, cover_ready_callback=None):
     """
     根据待添加条目的 exe / 图标，生成封面图片（内存模式）。
-    不再落地 temp 文件，统一存入 entry["cover_bytes"]。
+    优先级：Steam 本地封面 -> SGDB 自动匹配封面 -> 图标生成封面。
+
+    progress_callback(payload): optional callable for progress updates.
+    cover_ready_callback(entry, source): optional callable when one entry gets cover bytes.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     image_target_paths = []
     need_choose_cover_names = []
 
+    total_count = len(pending_entries)
+    done_count = 0
+    success_count = 0
+    steam_hits = 0
+    sgdb_hits = 0
+    icon_hits = 0
+    failed_count = 0
+
+    def _emit(stage, app_name=None, message=None):
+        if not progress_callback:
+            return
+        payload = {
+            "stage": stage,
+            "app_name": app_name,
+            "message": message or "",
+            "done": done_count,
+            "total": total_count,
+            "success": success_count,
+            "steam": steam_hits,
+            "sgdb": sgdb_hits,
+            "icon": icon_hits,
+            "failed": failed_count,
+        }
+        try:
+            progress_callback(payload)
+        except Exception:
+            pass
+
+    def _mark_done(entry, source, ok):
+        nonlocal done_count, success_count, steam_hits, sgdb_hits, icon_hits, failed_count
+
+        done_count += 1
+        if ok:
+            success_count += 1
+            if source == "steam":
+                steam_hits += 1
+            elif source == "sgdb":
+                sgdb_hits += 1
+            elif source == "icon":
+                icon_hits += 1
+            if cover_ready_callback:
+                try:
+                    cover_ready_callback(entry, source)
+                except Exception:
+                    pass
+        else:
+            failed_count += 1
+
+    sgdb_api_key = _get_sgdb_api_key()
+    sgdb_enabled = bool(sgdb_api_key)
+    net_options = None
+
+    if sgdb_enabled:
+        try:
+            net_options = _get_sgdb_network_options()
+            net_mode = net_options["proxy_url"] or ("system-proxy" if net_options["use_system_proxy"] else "direct")
+            print(f"SGDB 网络模式: {net_mode}")
+            _emit("init", message=f"SGDB network mode: {net_mode}")
+        except Exception as e:
+            sgdb_enabled = False
+            print(f"SGDB 初始化失败，回退图标封面: {e}")
+            _emit("init_error", message=f"SGDB init failed: {e}")
+    else:
+        _emit("init", message="SGDB disabled, icon fallback only")
+
     print("--------------------生成封面--------------------")
-    for entry in pending_entries:
+    sgdb_candidates = []
+
+    # 先做快速本地命中（Steam 本地封面）
+    for idx, entry in enumerate(pending_entries, start=1):
         app_name = entry["app_name"]
         shortcut_file = entry["shortcut_file"]
-        target_path = entry["target_path"]
         image_index = entry["image_index"]
 
         image_target_paths.append((shortcut_file, image_index))
         entry["image-path"] = f"output_image{image_index}.png"
 
-        # 优先尝试 Steam 本地封面（内存）
+        _emit("local_check", app_name=app_name, message=f"Checking local cover ({idx}/{total_count})")
         steam_cover_bytes = try_get_steam_cover_bytes_for_shortcut(app_name, shortcut_file)
         if steam_cover_bytes:
             entry["cover_bytes"] = steam_cover_bytes
-            print(f"已为Steam游戏 {app_name} 准备内存封面")
+            print(f"已为 Steam 游戏 {app_name} 准备内存封面")
+            _mark_done(entry, "steam", True)
+            _emit("item_done", app_name=app_name, message="Steam local cover found")
             continue
 
-        # 使用图标生成封面（内存）
-        from io import BytesIO
+        if sgdb_enabled:
+            sgdb_candidates.append(entry)
+
+    # 并发执行 SGDB 检索与下载
+    if sgdb_enabled and sgdb_candidates and net_options is not None:
+        max_workers = min(8, len(sgdb_candidates))
+        env_workers = os.environ.get("QSAA_SGDB_WORKERS", "").strip()
+        if env_workers:
+            try:
+                parsed = int(env_workers)
+                if parsed > 0:
+                    max_workers = min(max_workers, parsed)
+            except ValueError:
+                pass
+
+        print(f"SGDB 并发线程数: {max_workers}")
+        _emit("sgdb_start", message=f"Searching SGDB for {len(sgdb_candidates)} apps with {max_workers} workers")
+        thread_local = threading.local()
+
+        def _get_thread_client():
+            client = getattr(thread_local, "sgdb_client", None)
+            if client is None:
+                client = SteamGridDBApiClient(
+                    sgdb_api_key,
+                    use_system_proxy=net_options["use_system_proxy"],
+                    proxy_url=net_options["proxy_url"]
+                )
+                thread_local.sgdb_client = client
+            return client
+
+        def _fetch_sgdb_cover(entry):
+            client = _get_thread_client()
+            cover_bytes = try_get_sgdb_cover_bytes_for_entry(
+                app_name=entry["app_name"],
+                target_path=entry["target_path"],
+                shortcut_file=entry["shortcut_file"],
+                sgdb_client=client
+            )
+            return entry, cover_bytes
+
+        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="sgdb") as executor:
+            future_map = {executor.submit(_fetch_sgdb_cover, entry): entry for entry in sgdb_candidates}
+            for future in as_completed(future_map):
+                entry = future_map[future]
+                app_name = entry["app_name"]
+                try:
+                    _, sgdb_cover_bytes = future.result()
+                    if sgdb_cover_bytes:
+                        entry["cover_bytes"] = sgdb_cover_bytes
+                        _mark_done(entry, "sgdb", True)
+                        print(f"已从 SGDB 自动匹配封面: {app_name}")
+                        _emit("item_done", app_name=app_name, message="SGDB cover downloaded")
+                    else:
+                        _emit("sgdb_miss", app_name=app_name, message="No SGDB match, fallback to icon")
+                except requests.RequestException as e:
+                    print(f"SGDB 请求失败 {app_name}: {e}")
+                    _emit("sgdb_error", app_name=app_name, message=f"SGDB request failed: {e}")
+                except Exception as e:
+                    print(f"SGDB 匹配失败 {app_name}: {e}")
+                    _emit("sgdb_error", app_name=app_name, message=f"SGDB matching failed: {e}")
+
+    # 兜底：剩余未命中的条目使用图标生成封面（保持串行，避免图标临时文件冲突）
+    for entry in pending_entries:
+        if entry.get("cover_bytes"):
+            continue
+
+        app_name = entry["app_name"]
+        target_path = entry["target_path"]
+        image_index = entry["image_index"]
+
+        _emit("icon_generating", app_name=app_name, message="Generating icon fallback cover")
         cover_buffer = BytesIO()
         create_image_with_icon(target_path, cover_buffer, image_index)
         cover_bytes = cover_buffer.getvalue()
         if cover_bytes:
             entry["cover_bytes"] = cover_bytes
-        print(f"已生成封面: {app_name}")
-        need_choose_cover_names.append(app_name)
+            _mark_done(entry, "icon", True)
+        else:
+            _mark_done(entry, "icon", False)
 
+        print(f"已生成封面 {app_name}")
+        need_choose_cover_names.append(app_name)
+        _emit("item_done", app_name=app_name, message="Icon fallback finished")
+
+    _emit("finished", message="Cover generation completed")
     return image_target_paths, need_choose_cover_names
 
 from confirm_add_window import ConfirmAddWindow

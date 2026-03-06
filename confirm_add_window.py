@@ -1,4 +1,4 @@
-﻿import os
+import os
 import threading
 import uuid
 from io import BytesIO
@@ -66,7 +66,7 @@ class ConfirmGameCard(QtWidgets.QFrame):
         self.import_btn.clicked.connect(lambda: self.parent_window.on_import_cover(self.entry))
         btns.addWidget(self.import_btn)
 
-        self.edit_btn = QtWidgets.QPushButton('Edit')
+        self.edit_btn = QtWidgets.QPushButton('Fix name')
         self.edit_btn.setFixedHeight(22)
         self.edit_btn.clicked.connect(lambda: self.parent_window.show_edit_panel(self.entry))
         btns.addWidget(self.edit_btn)
@@ -114,6 +114,8 @@ class ConfirmGameCard(QtWidgets.QFrame):
 
 class ConfirmAddWindow(QtWidgets.QWidget):
     covers_finished = QtCore.pyqtSignal()
+    cover_progress = QtCore.pyqtSignal(object)
+    cover_item_ready = QtCore.pyqtSignal(object, str)
     confirmed = QtCore.pyqtSignal(list)
     cancelled = QtCore.pyqtSignal()
 
@@ -138,8 +140,21 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.ignore_mode = False
         self.current_edit_entry = None
         self._cards = []
+        self._entry_card_map = {}
+        self._cover_stats = {
+            'done': 0,
+            'total': len(self.pending_entries),
+            'success': 0,
+            'steam': 0,
+            'sgdb': 0,
+            'icon': 0,
+            'failed': 0,
+            'message': ''
+        }
 
         self.covers_finished.connect(self._on_covers_finished)
+        self.cover_progress.connect(self._on_cover_progress)
+        self.cover_item_ready.connect(self._on_cover_item_ready)
 
         self._setup_ui()
 
@@ -195,8 +210,10 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.scroll.setWidget(self.container)
         left_layout.addWidget(self.scroll)
 
-        self.status_label = QtWidgets.QLabel('Generating covers in background...')
+        self.status_label = QtWidgets.QLabel(f'Generating covers in background... (0/{len(self.pending_entries)})')
         self.status_label.setStyleSheet('color:#2E7D9B')
+        self.status_label.setMaximumWidth(600)
+        self.status_label.setWordWrap(True)
         left_layout.addWidget(self.status_label)
 
         bottom = QtWidgets.QHBoxLayout()
@@ -314,6 +331,8 @@ class ConfirmAddWindow(QtWidgets.QWidget):
                 if term in e.get('app_name', '').lower() or term in str(e.get('target_path', '')).lower()
             ]
 
+        self._entry_card_map = {}
+
         if not self.filtered_entries:
             label = QtWidgets.QLabel('No pending app found')
             self.grid.addWidget(label, 0, 0)
@@ -346,6 +365,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             col = idx % cols
             self.grid.addWidget(card, row, col)
             cards.append(card)
+            self._entry_card_map[id(entry)] = card
 
         self._cards = cards
         self.container.setMinimumWidth(viewport_width)
@@ -385,7 +405,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
             entry['cover_bytes'] = buf.getvalue()
             entry['image-path'] = newname
-            self._debounce_refresh()
+            self._refresh_entry_card(entry)
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, 'Error', f'Import cover failed: {e}')
 
@@ -398,7 +418,9 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         def worker():
             image_target_paths, need_choose_cover_names = generate_covers_for_entries(
                 self.pending_entries,
-                self.output_folder
+                self.output_folder,
+                progress_callback=lambda payload: self.cover_progress.emit(payload),
+                cover_ready_callback=lambda entry, source: self.cover_item_ready.emit(entry, source)
             )
             self.image_target_paths = image_target_paths
             self.need_choose_cover_names = need_choose_cover_names
@@ -409,9 +431,63 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot()
     def _on_covers_finished(self):
-        self.status_label.setText('Cover generation finished. Please confirm apps to write.')
+        done = self._cover_stats.get('done', 0)
+        total = self._cover_stats.get('total', len(self.pending_entries))
+        success = self._cover_stats.get('success', 0)
+        failed = self._cover_stats.get('failed', 0)
+        self.status_label.setText(
+            f'Cover generation finished ({done}/{total}) | Success: {success} | Failed: {failed}. Please confirm apps to write.'
+        )
         self.confirm_btn.setEnabled(True)
         self._debounce_refresh()
+
+    def _refresh_entry_card(self, entry):
+        card = self._entry_card_map.get(id(entry))
+        if card is not None:
+            card.refresh_cover()
+            card.refresh_text()
+            card.update()
+
+    @QtCore.pyqtSlot(object, str)
+    def _on_cover_item_ready(self, entry, source):
+        self._refresh_entry_card(entry)
+
+    @QtCore.pyqtSlot(object)
+    def _on_cover_progress(self, payload):
+        if not isinstance(payload, dict):
+            return
+
+        self._cover_stats.update({
+            'done': payload.get('done', self._cover_stats.get('done', 0)),
+            'total': payload.get('total', self._cover_stats.get('total', 0)),
+            'success': payload.get('success', self._cover_stats.get('success', 0)),
+            'steam': payload.get('steam', self._cover_stats.get('steam', 0)),
+            'sgdb': payload.get('sgdb', self._cover_stats.get('sgdb', 0)),
+            'icon': payload.get('icon', self._cover_stats.get('icon', 0)),
+            'failed': payload.get('failed', self._cover_stats.get('failed', 0)),
+            'message': payload.get('message', '') or ''
+        })
+
+        done = self._cover_stats['done']
+        total = self._cover_stats['total']
+        success = self._cover_stats['success']
+        steam = self._cover_stats['steam']
+        sgdb = self._cover_stats['sgdb']
+        icon = self._cover_stats['icon']
+        failed = self._cover_stats['failed']
+        msg = self._cover_stats['message']
+        app_name = payload.get('app_name')
+
+        suffix = ''
+        if app_name:
+            suffix = f' | Current: {app_name}'
+        if msg:
+            suffix += f' | {msg}'
+
+        self.status_label.setText(
+            f'Generating covers in background... ({done}/{total}) | Success: {success} '
+            f'(Steam {steam} / SGDB {sgdb} / Icon {icon}) | Failed: {failed}{suffix}'
+        )
 
     def _on_confirm_clicked(self):
         selected = [e for e in self.pending_entries if e.get('selected', True)]
