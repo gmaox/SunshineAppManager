@@ -986,13 +986,14 @@ def try_get_sgdb_cover_bytes_for_entry(app_name, target_path, shortcut_file, sgd
     return None
 
 
-def generate_covers_for_entries(pending_entries, output_folder, progress_callback=None, cover_ready_callback=None):
+def generate_covers_for_entries(pending_entries, output_folder, progress_callback=None, cover_ready_callback=None, cancel_event=None):
     """
     根据待添加条目的 exe / 图标，生成封面图片（内存模式）。
     优先级：Steam 本地封面 -> SGDB 自动匹配封面 -> 图标生成封面。
 
     progress_callback(payload): optional callable for progress updates.
     cover_ready_callback(entry, source): optional callable when one entry gets cover bytes.
+    cancel_event: threading.Event instance; if set, generation should stop as soon as possible.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -1067,8 +1068,19 @@ def generate_covers_for_entries(pending_entries, output_folder, progress_callbac
     print("--------------------生成封面--------------------")
     sgdb_candidates = []
 
+    # helper to quit early if cancellation requested
+    def _check_cancel():
+        if cancel_event and cancel_event.is_set():
+            print("Cover generation cancelled")
+            _emit("cancelled", message="Cancelled by user")
+            return True
+        return False
+
     # 先做快速本地命中（Steam 本地封面）
     for idx, entry in enumerate(pending_entries, start=1):
+        if _check_cancel():
+            return image_target_paths, need_choose_cover_names
+
         app_name = entry["app_name"]
         shortcut_file = entry["shortcut_file"]
         image_index = entry["image_index"]
@@ -1116,6 +1128,9 @@ def generate_covers_for_entries(pending_entries, output_folder, progress_callbac
             return client
 
         def _fetch_sgdb_cover(entry):
+            # allow individual tasks to abort early
+            if cancel_event and cancel_event.is_set():
+                return entry, None
             client = _get_thread_client()
             cover_bytes = try_get_sgdb_cover_bytes_for_entry(
                 app_name=entry["app_name"],
@@ -1128,6 +1143,8 @@ def generate_covers_for_entries(pending_entries, output_folder, progress_callbac
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="sgdb") as executor:
             future_map = {executor.submit(_fetch_sgdb_cover, entry): entry for entry in sgdb_candidates}
             for future in as_completed(future_map):
+                if _check_cancel():
+                    break
                 entry = future_map[future]
                 app_name = entry["app_name"]
                 try:
@@ -1148,6 +1165,8 @@ def generate_covers_for_entries(pending_entries, output_folder, progress_callbac
 
     # 兜底：剩余未命中的条目使用图标生成封面（保持串行，避免图标临时文件冲突）
     for entry in pending_entries:
+        if _check_cancel():
+            break
         if entry.get("cover_bytes"):
             continue
 

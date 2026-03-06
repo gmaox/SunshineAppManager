@@ -234,7 +234,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 
     def _setup_ui(self):
         self.setWindowTitle(f"SGDB封面选择 - {self.app_name}")
-        self.resize(980, 620)
+        self.resize(900, 480)
 
         main = QtWidgets.QVBoxLayout(self)
 

@@ -171,6 +171,9 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.pseudo_sorting_enabled = pseudo_sorting_enabled
         self.close_after_completion = close_after_completion
 
+        # event to signal that background cover generation should stop
+        self._cancel_cover_event = threading.Event()
+
         for e in self.pending_entries:
             e.setdefault('selected', True)
 
@@ -349,6 +352,11 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self._debounce_refresh()
         return super().resizeEvent(event)
 
+    def closeEvent(self, event):
+        """When the window is closed we should cancel any pending cover generation."""
+        self._cancel_cover_event.set()
+        super().closeEvent(event)
+
     def eventFilter(self, watched, event):
         if watched is self.container and event.type() == QtCore.QEvent.Resize:
             self._debounce_refresh()
@@ -461,7 +469,8 @@ class ConfirmAddWindow(QtWidgets.QWidget):
                 self.pending_entries,
                 self.output_folder,
                 progress_callback=lambda payload: self.cover_progress.emit(payload),
-                cover_ready_callback=lambda entry, source: self.cover_item_ready.emit(entry, source)
+                cover_ready_callback=lambda entry, source: self.cover_item_ready.emit(entry, source),
+                cancel_event=self._cancel_cover_event
             )
             self.image_target_paths = image_target_paths
             self.need_choose_cover_names = need_choose_cover_names
@@ -539,6 +548,8 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.confirmed.emit(selected)
 
     def _on_cancel_clicked(self):
+        # stop background work
+        self._cancel_cover_event.set()
         self.cancelled.emit()
 
     def get_selected_entries(self):
