@@ -39,6 +39,17 @@ try:
 except Exception:
     IgnoreManager = None
 
+# 嵌入扫描器界面
+try:
+    from scanner_add_page import ScannerAddPage
+except Exception:
+    ScannerAddPage = None
+
+try:
+    from scanner_manage_page import ScannerManagePage
+except Exception:
+    ScannerManagePage = None
+
 
 # 日志信号发射器
 class LogSignalEmitter(QObject):
@@ -458,6 +469,16 @@ class MainWindow(QMainWindow):
                 ignore_widget = IgnoreManager()
                 ignore_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
                 v.addWidget(ignore_widget)
+            elif i == 5 and ScannerAddPage is not None:
+                # 添加扫描器标签页
+                scanner_add_widget = ScannerAddPage()
+                scanner_add_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                v.addWidget(scanner_add_widget)
+            elif i == 6 and ScannerManagePage is not None:
+                # 扫描器管理标签页
+                scanner_manage_widget = ScannerManagePage()
+                scanner_manage_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                v.addWidget(scanner_manage_widget)
             else:
                 # 其他标签页 - 显示占位符
                 label = QLabel(f"这是标签页{i+1}的内容")

@@ -69,7 +69,7 @@ class ConfirmGameCard(QtWidgets.QFrame):
         self.import_btn.clicked.connect(lambda: self.parent_window.on_import_cover(self.entry))
         btns.addWidget(self.import_btn)
 
-        self.edit_btn = QtWidgets.QPushButton('Fix name')
+        self.edit_btn = QtWidgets.QPushButton('Edit')
         self.edit_btn.setFixedHeight(22)
         self.edit_btn.clicked.connect(lambda: self.parent_window.show_edit_panel(self.entry))
         btns.addWidget(self.edit_btn)
