@@ -1359,6 +1359,13 @@ def runtomain():
             "selected": True,
         })
 
+    # 重新分配唯一的image_index以避免重复
+    used_indices = set()
+    for entry in pending_entries:
+        image_index = find_unused_index(apps_json, [(None, idx) for idx in used_indices])
+        entry["image_index"] = image_index
+        used_indices.add(image_index)
+
     if not pending_entries:
         # 模拟一个错误，使用stderr输出以触发错误通知
         import sys
