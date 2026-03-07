@@ -199,13 +199,19 @@ class EditGameCard(QtWidgets.QFrame):
         newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
         output_path = os.path.join(TEMP_COVERS_DIR, newname)
         
-        result_path, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
+        result_bytes, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
             app_name=app_name,
             output_path=output_path,
             exe_path=exe_path
         )
         
-        if result_path:
+        if result_bytes:
+            # 保存bytes到covers目录
+            covers_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
+            os.makedirs(covers_dir, exist_ok=True)
+            cover_path = os.path.join(covers_dir, newname)
+            with open(cover_path, 'wb') as f:
+                f.write(result_bytes)
             self.entry['image-path'] = newname
             if sgdb_name:
                 self.entry['name'] = sgdb_name  # 更新名称如果选择了应用 SGDB 名称

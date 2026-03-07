@@ -130,21 +130,15 @@ class ConfirmGameCard(QtWidgets.QFrame):
         newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
         output_path = os.path.join(TEMP_COVERS_DIR, newname)
         
-        result_path, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
+        result_bytes, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
             app_name=app_name,
             output_path=output_path,
             exe_path=exe_path
         )
         
-        if result_path:
+        if result_bytes:
             try:
-                from PIL import Image
-                img = Image.open(result_path)
-                img = img.resize((600, 900), Image.LANCZOS)
-                buf = BytesIO()
-                img.save(buf, 'JPEG', quality=95)
-                
-                self.entry['cover_bytes'] = buf.getvalue()
+                self.entry['cover_bytes'] = result_bytes
                 self.entry['image-path'] = newname
                 if sgdb_name:
                     self.entry['app_name'] = sgdb_name  # 更新名称如果选择了应用 SGDB 名称
@@ -221,7 +215,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.search_edit.setFixedHeight(30)
         h.addWidget(self.search_edit)
 
-        self.search_btn = QtWidgets.QPushButton('槨查')
+        self.search_btn = QtWidgets.QPushButton('搜索')
         self.search_btn.setFixedHeight(30)
         self.search_btn.setFixedWidth(80)
         self.search_btn.clicked.connect(self._debounce_refresh)
@@ -534,7 +528,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         success = self._cover_stats.get('success', 0)
         failed = self._cover_stats.get('failed', 0)
         self.status_label.setText(
-            f'封面一一生成完成 ({done}/{total}) | 成功: {success} | 失败: {failed}。请确认应用昭口。'
+            f'封面一一生成完成 ({done}/{total}) | 成功: {success} | 失败: {failed}。请确认应用。'
         )
         self.confirm_btn.setEnabled(True)
         self._debounce_refresh()

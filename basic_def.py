@@ -85,6 +85,25 @@ def load_apps_json(json_path):
         return {"env": "", "apps": []}
     
 def save_apps_json(apps_json, file_path):
+    # 处理内存中的封面bytes，保存到covers目录
+    covers_target_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
+    os.makedirs(covers_target_dir, exist_ok=True)
+    
+    for entry in apps_json.get('apps', []):
+        cover_bytes = entry.get('cover_bytes')
+        if cover_bytes and isinstance(cover_bytes, bytes):
+            image_path = entry.get('image-path')
+            if image_path:
+                dst_path = os.path.join(covers_target_dir, image_path)
+                try:
+                    with open(dst_path, 'wb') as f:
+                        f.write(cover_bytes)
+                    print(f"已将内存封面保存到 {image_path}")
+                except Exception as e:
+                    print(f"保存封面 {image_path} 失败: {e}")
+            # 移除cover_bytes以避免json中包含bytes
+            del entry['cover_bytes']
+    
     # 将更新后的 apps.json 保存到文件
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(apps_json, f, ensure_ascii=False, indent=4)
@@ -92,9 +111,6 @@ def save_apps_json(apps_json, file_path):
     # 将 temp 目录中的所有封面文件一起写入到目标目录
     if os.path.exists(TEMP_COVERS_DIR):
         try:
-            covers_target_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
-            os.makedirs(covers_target_dir, exist_ok=True)
-            
             for filename in os.listdir(TEMP_COVERS_DIR):
                 src_path = os.path.join(TEMP_COVERS_DIR, filename)
                 dst_path = os.path.join(covers_target_dir, filename)

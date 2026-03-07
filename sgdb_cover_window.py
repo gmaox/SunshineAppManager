@@ -200,7 +200,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         self.exe_path = exe_path
         self.remaining_games = remaining_games
 
-        self.result_path = None
+        self.result_bytes = None
         self.result_sgdb_name = None
         self.used_icon = False
         self.selected_game_name = None
@@ -491,14 +491,8 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
                 if not final_bytes:
                     raise RuntimeError("封面下载失败，url/thumb 均不可用")
 
-                out_dir = os.path.dirname(self.output_path)
-                if out_dir:
-                    os.makedirs(out_dir, exist_ok=True)
-                with open(self.output_path, "wb") as f:
-                    f.write(final_bytes)
-
                 sgdb_name = self.selected_game_name if self.apply_name_chk.isChecked() and self.selected_game_name else None
-                self.cover_saved.emit(self.output_path, sgdb_name)
+                self.cover_saved.emit(final_bytes, sgdb_name)
             except Exception as e:
                 self.cover_error.emit(str(e))
 
@@ -506,7 +500,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 
     @QtCore.pyqtSlot(object, object)
     def _on_cover_saved(self, output_path, sgdb_name):
-        self.result_path = output_path
+        self.result_bytes = output_path  # 这里output_path实际上是bytes
         self.result_sgdb_name = sgdb_name
         self.used_icon = False
         self.accept()
@@ -538,15 +532,14 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
                 y = max(0, (local_image.height - target_size[1]) // 2)
                 final_image = local_image.crop((x, y, x + target_size[0], y + target_size[1]))
 
-                out_dir = os.path.dirname(self.output_path)
-                if out_dir:
-                    os.makedirs(out_dir, exist_ok=True)
+                output = BytesIO()
                 if self.output_path.lower().endswith(".png"):
-                    final_image.save(self.output_path, "PNG")
+                    final_image.save(output, "PNG")
                 else:
-                    final_image.save(self.output_path, "JPEG", quality=95)
+                    final_image.save(output, "JPEG", quality=95)
+                final_bytes = output.getvalue()
 
-            self.result_path = self.output_path
+            self.result_bytes = final_bytes
             self.result_sgdb_name = self.selected_game_name if self.apply_name_chk.isChecked() and self.selected_game_name else None
             self.used_icon = False
             self.accept()
@@ -581,7 +574,7 @@ def choose_cover_with_sgdb_qt(app_name, output_path, exe_path=None, remaining_ga
     )
     accepted = dlg.exec_() == QtWidgets.QDialog.Accepted
 
-    result = (dlg.result_path if accepted else None, dlg.used_icon, dlg.result_sgdb_name)
+    result = (dlg.result_bytes if accepted else None, dlg.used_icon, dlg.result_sgdb_name)
 
     if created:
         app.quit()
