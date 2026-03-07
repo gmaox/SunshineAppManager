@@ -420,7 +420,7 @@ class LogTab(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Sunshine App Manager")
+        self.setWindowTitle("Sunshine App Manager v1.0")
         self.resize(900, 480)
 
         tab_names = [

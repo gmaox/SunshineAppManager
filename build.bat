@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
 echo 正在使用 PyInstaller 打包 QuickStreamAppAdd ...
-py -m PyInstaller --clean QuickStreamAppAdd.spec
+C:/Users/86150/AppData/Local/Programs/Python/Python38/python.exe -m PyInstaller main.py -w -i ".\icon.ico" -n SunshineAppManager --clean --noconfirm
 if %ERRORLEVEL% equ 0 (
     echo.
     echo 打包完成。输出目录: dist\QuickStreamAppAdd.exe
 ) else (
     echo 打包失败，请检查是否已安装: pip install pyinstaller
+    pause
 )
-pause

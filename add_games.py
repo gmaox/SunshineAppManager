@@ -64,7 +64,7 @@ class AddGameWindow(QWidget):
         left_desc4.setFont(QFont("Segoe UI", 12))
         left_desc4.setWordWrap(True)
         left_layout.addWidget(left_desc4)        
-        left_desc5 = QLabel("（你也可以将游戏启动文件拖入此处添加）")
+        left_desc5 = QLabel("（也可以将游戏启动文件拖入此处添加，一次可拖入多个）")
         left_desc5.setFont(QFont("Segoe UI", 10))
         left_desc5.setWordWrap(True)
         left_layout.addWidget(left_desc5)

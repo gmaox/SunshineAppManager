@@ -1,8 +1,6 @@
 import os, sys, time, glob, json, re, shutil, threading, configparser, subprocess, urllib3, tempfile, ctypes, copy
 from ctypes import wintypes
 import tkinter as tk
-from tkinter import filedialog, messagebox
-
 import winreg, win32com.client, pythoncom, win32api, win32con, win32security, win32process, win32gui, psutil, vdf
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 from colorthief import ColorThief
@@ -155,11 +153,6 @@ def load_config():
     if not os.path.isdir(folder):
         
         # 弹窗提示
-        messagebox.showinfo(
-            "首次启动QSAA - 关于工作路径",
-            "这似乎是你第一次启动QSAA，请了解工作路径是什么\n\n该程序会扫描工作路径的快捷方式，加入到Sunshine中\n程序默认工作路径为：程序同级路径\\appfolder\n游戏添加方法：快速添加按钮/主页添加steam游戏/手动拖入文件夹\n工作目录可在主页中修改\ntip：若选择桌面目录，主页的排除功能是很有用的（排除非游戏快捷方式）",
-            icon="question"
-        )
         folder = os.path.realpath(os.path.join(os.path.dirname(sys.executable), "appfolder")).replace("\\", "/")
         # 同步两个变量，确保后续代码使用的 `folder_selected` 有值
         folder_selected = folder

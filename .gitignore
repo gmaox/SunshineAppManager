@@ -1,4 +1,7 @@
 __pycache__/
 config.ini
 temp/
+dist/
+build/
 config/scanners.json
+SunshineAppManager.spec

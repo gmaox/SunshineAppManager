@@ -72,7 +72,7 @@ class EditGameCard(QtWidgets.QFrame):
 
         cmd = self.entry.get('cmd', '')
         # 不截断命令行路径，允许 QLabel 自动换行显示完整内容
-        self.cmd_lbl = QtWidgets.QLabel('路径: ' + cmd)
+        self.cmd_lbl = QtWidgets.QLabel(cmd)
         self.cmd_lbl.setStyleSheet('color:#666')
         self.cmd_lbl.setWordWrap(True)
         v.addWidget(self.cmd_lbl)
