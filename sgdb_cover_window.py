@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import threading
+import webbrowser
 from io import BytesIO
 from urllib.parse import quote
 
@@ -211,6 +212,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         self._grid_buttons = []
         self._grid_data = []
         self._all_search_games = []
+        self._clipboard_hint_window = None
 
         net = _get_sgdb_network_options()
         self.sgdb = SteamGridDBApiClient(
@@ -247,6 +249,10 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         self.search_btn = QtWidgets.QPushButton("搜索")
         self.search_btn.clicked.connect(lambda: self._start_search(self.search_edit.text().strip()))
         top.addWidget(self.search_btn)
+
+        self.browser_btn = QtWidgets.QPushButton("在浏览器中查找")
+        self.browser_btn.clicked.connect(self._open_browser_search_helper)
+        top.addWidget(self.browser_btn)
 
         self.local_btn = QtWidgets.QPushButton("选择本地图片")
         self.local_btn.clicked.connect(self._select_local_image)
@@ -313,6 +319,24 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 
     def _set_status(self, text):
         self.status_label.setText(text)
+
+    def _open_browser_search_helper(self):
+        name = (self.search_edit.text() or "").strip() or (self.app_name or "").strip()
+        if not name:
+            self._set_status("请输入游戏名称后再在浏览器中查找")
+            return
+
+        try:
+            query = quote(name)
+            url = f"https://www.bing.com/images/search?q={query}"
+            webbrowser.open(url)
+        except Exception as e:
+            self._set_status(f"打开浏览器失败: {e}")
+            return
+
+        hint = ClipboardCoverHintWindow(self)
+        self._clipboard_hint_window = hint
+        hint.show()
 
     def _start_search(self, keyword):
         name = (keyword or "").strip()
@@ -558,6 +582,98 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 def _normalize_text(value):
     return " ".join(str(value or "").strip().lower().split())
 
+
+class ClipboardCoverHintWindow(QtWidgets.QDialog):
+    def __init__(self, parent_dialog: "SgdbCoverPickerDialog"):
+        super().__init__(parent_dialog)
+        self.parent_dialog = parent_dialog
+        self.setWindowFlags(
+            QtCore.Qt.FramelessWindowHint
+            | QtCore.Qt.WindowStaysOnTopHint
+            | QtCore.Qt.Tool
+        )
+        self.setWindowOpacity(0.9)
+        self.setModal(False)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        label = QtWidgets.QLabel(
+            "请在浏览器中找到合适的封面图片并复制到剪贴板，"
+            "然后点击下方按钮从剪贴板读取图像作为封面。"
+        )
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        btn = QtWidgets.QPushButton("读取剪贴板中图像并使用为封面")
+        btn.setFixedHeight(40)
+        btn.clicked.connect(self._read_clipboard_image)
+        layout.addWidget(btn)
+
+        cancel_btn = QtWidgets.QPushButton("取消")
+        cancel_btn.setFixedHeight(40)
+        cancel_btn.clicked.connect(self.close)
+        layout.addWidget(cancel_btn)
+
+        self.adjustSize()
+        self._move_to_top_center()
+
+    def _move_to_top_center(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen is None:
+            return
+        geo = screen.availableGeometry()
+        x = geo.x() + (geo.width() - self.width()) // 2
+        y = geo.y() + 10
+        self.move(x, y)
+
+    def _read_clipboard_image(self):
+        cb = QtWidgets.QApplication.clipboard()
+        img = cb.image()
+        if img.isNull():
+            pix = cb.pixmap()
+            if not pix.isNull():
+                img = pix.toImage()
+
+        if img.isNull():
+            self.parent_dialog._set_status("剪贴板中未检测到图像，请先在浏览器中复制图片")
+            return
+
+        try:
+            buffer = QtCore.QBuffer()
+            buffer.open(QtCore.QIODevice.WriteOnly)
+            img.save(buffer, "PNG")
+            data = bytes(buffer.data())
+
+            with Image.open(BytesIO(data)) as pil_image:
+                if pil_image.mode != "RGB":
+                    pil_image = pil_image.convert("RGB")
+                target_size = (600, 900)
+                scale = max(target_size[0] / pil_image.width, target_size[1] / pil_image.height)
+                new_size = (int(pil_image.width * scale), int(pil_image.height * scale))
+                pil_image = pil_image.resize(new_size, Image.LANCZOS)
+
+                x = max(0, (pil_image.width - target_size[0]) // 2)
+                y = max(0, (pil_image.height - target_size[1]) // 2)
+                final_image = pil_image.crop((x, y, x + target_size[0], y + target_size[1]))
+
+                output = BytesIO()
+                if str(self.parent_dialog.output_path or "").lower().endswith(".png"):
+                    final_image.save(output, "PNG")
+                else:
+                    final_image.save(output, "JPEG", quality=95)
+                final_bytes = output.getvalue()
+
+            self.parent_dialog.result_bytes = final_bytes
+            self.parent_dialog.result_sgdb_name = (
+                self.parent_dialog.selected_game_name
+                if self.parent_dialog.apply_name_chk.isChecked()
+                and self.parent_dialog.selected_game_name
+                else None
+            )
+            self.parent_dialog.used_icon = False
+            self.parent_dialog.accept()
+            self.close()
+        except Exception as e:
+            self.parent_dialog._set_status(f"读取剪贴板图像失败: {e}")
 
 def choose_cover_with_sgdb_qt(app_name, output_path, exe_path=None, remaining_games=None):
     app = QtWidgets.QApplication.instance()
