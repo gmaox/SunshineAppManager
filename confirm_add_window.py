@@ -5,7 +5,7 @@ from io import BytesIO
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from basic_def import generate_covers_for_entries, config, save_config
+from basic_def import generate_covers_for_entries, config, save_config, restart_sunshine_after_add, load_config
 from sgdb_cover_window import choose_cover_with_sgdb_qt
 
 THUMB_SIZE = (80, 120)
@@ -158,6 +158,9 @@ class ConfirmAddWindow(QtWidgets.QWidget):
                  pseudo_sorting_enabled=False, close_after_completion=True, parent=None):
         super().__init__(parent)
 
+        # 确保配置已加载
+        load_config()
+
         self.pending_entries = pending_entries
         self.apps_json = apps_json
         self.apps_json_path = apps_json_path
@@ -261,6 +264,13 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         bottom.addWidget(self.ignore_btn)
 
         bottom.addStretch()
+
+        # 添加重启提示标签（开关开启时显示）
+        self.restart_hint_label = QtWidgets.QLabel('写入会重启sunshine')
+        self.restart_hint_label.setStyleSheet('color:#666;font-size:8px;padding:0px;margin:0px;')
+        from basic_def import restart_sunshine_after_add as current_value
+        self.restart_hint_label.setVisible(current_value)
+        bottom.addWidget(self.restart_hint_label)
 
         self.confirm_btn = QtWidgets.QPushButton('写入 Sunshine')
         self.confirm_btn.setFixedHeight(40)
@@ -580,6 +590,11 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             f'正在后台生成封面... ({done}/{total}) | 成功: {success} '
             f'(Steam {steam} / SGDB {sgdb} / 图标 {icon}) | 失败: {failed}{suffix}'
         )
+
+    def update_restart_hint(self):
+        """更新重启提示标签的显示状态"""
+        from basic_def import restart_sunshine_after_add as current_value
+        self.restart_hint_label.setVisible(current_value)
 
     def _on_confirm_clicked(self):
         selected = [e for e in self.pending_entries if e.get('selected', True)]

@@ -29,6 +29,7 @@ folder_selected = ''
 close_after_completion = True  # 默认开启
 pseudo_sorting_enabled = False  # 新增伪排序适应选项，默认关闭
 auto_delete_orphaned_entries = False  # 自动删除孤立条目（不再询问），默认关闭
+restart_sunshine_after_add = False  # 添加后重启sunshine，默认关闭
 
 def get_app_install_path():
     app_name = "sunshine"
@@ -125,7 +126,7 @@ def save_apps_json(apps_json, file_path):
             print(f"处理 temp 封面文件失败: {e}")
 def load_config():
     """加载配置文件并同步 `folder_selected` 变量"""
-    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries
+    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add
     # 优先使用 UTF-8 打开配置文件以避免系统默认编码（如 GBK）导致的 UnicodeDecodeError。
     # 如果文件不存在则跳过，后续会调用 save_config() 创建默认文件。
     if os.path.exists(config_file_path):
@@ -156,6 +157,8 @@ def load_config():
     steam_excluded_games = steam_excluded_games_str.split(',') if steam_excluded_games_str else []
     # 新增 auto_delete_orphaned_entries
     auto_delete_orphaned_entries = config.getboolean('Settings', 'auto_delete_orphaned_entries', fallback=False)
+    # 新增 restart_sunshine_after_add
+    restart_sunshine_after_add = config.getboolean('Settings', 'restart_sunshine_after_add', fallback=False)
     if os.path.exists(config_file_path)==False:
         save_config()  #没有配置文件保存下
     # 检查 folder 是否有效
@@ -179,7 +182,7 @@ def load_config():
 def save_config():
     """保存选择的目录到配置文件"""
     try:
-        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries  # 添加全局变量声明
+        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add  # 添加全局变量声明
         # 优先使用运行时的 `folder_selected`，保持一致性
         if folder_selected:
             folder = folder_selected
@@ -198,7 +201,9 @@ def save_config():
             # 新增 steam_excluded_games
             'steam_excluded_games': ','.join(steam_excluded_games) if steam_excluded_games else '',
             # 新增 auto_delete_orphaned_entries
-            'auto_delete_orphaned_entries': str(auto_delete_orphaned_entries)
+            'auto_delete_orphaned_entries': str(auto_delete_orphaned_entries),
+            # 新增 restart_sunshine_after_add
+            'restart_sunshine_after_add': str(restart_sunshine_after_add)
         }
         
         # 保留 ignored_apps 如果存在
@@ -1370,7 +1375,7 @@ def runtomain():
         # 模拟一个错误，使用stderr输出以触发错误通知
         import sys
         error_message = "没有检测到需要添加的新应用。"
-        print(f"Error: {error_message}", file=sys.stderr)
+        print(f"{error_message}", file=sys.stderr)
         return
     
     # 通过 main window 显示确认窗口
@@ -1406,7 +1411,7 @@ def runtomain():
 
 def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
     """处理确认添加的条目，将其写入 apps.json。内存封面会在此阶段写入目标目录。"""
-    global pseudo_sorting_enabled, close_after_completion
+    global pseudo_sorting_enabled, close_after_completion, restart_sunshine_after_add
 
     covers_target_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
     os.makedirs(covers_target_dir, exist_ok=True)
@@ -1441,7 +1446,8 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
 
     save_apps_json(apps_json, apps_json_path)
 
-    restart_service()
+    if restart_sunshine_after_add:
+        restart_service()
 
     if close_after_completion:
         os._exit(0)

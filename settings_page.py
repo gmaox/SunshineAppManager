@@ -51,7 +51,7 @@ class SettingsPage(QWidget):
         
         # 1. 开关示例（完成后关闭）
         enable_notify_layout = QHBoxLayout()
-        enable_notify_label = QLabel("完成后关闭程序：")
+        enable_notify_label = QLabel("添加后关闭程序：")
         enable_notify_label.setFont(QFont("Segoe UI", 12))
         self.enable_notify_checkbox = QCheckBox()
         self.enable_notify_checkbox.setChecked(basic_def.close_after_completion)
@@ -66,6 +66,21 @@ class SettingsPage(QWidget):
         enable_notify_layout.addStretch()
         settings_layout.addLayout(enable_notify_layout)
         
+        # 4. 添加后重启sunshine（默认关闭）
+        restart_sunshine_layout = QHBoxLayout()
+        restart_sunshine_label = QLabel("添加后重启sunshine：")
+        restart_sunshine_label.setFont(QFont("Segoe UI", 12))
+        self.restart_sunshine_checkbox = QCheckBox()
+        self.restart_sunshine_checkbox.setChecked(basic_def.restart_sunshine_after_add)
+        self.restart_sunshine_checkbox.setStyleSheet(
+            "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
+            "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
+            "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
+        )
+        restart_sunshine_layout.addWidget(restart_sunshine_label)
+        restart_sunshine_layout.addWidget(self.restart_sunshine_checkbox)
+        restart_sunshine_layout.addStretch()
+        settings_layout.addLayout(restart_sunshine_layout)
         # 2. 开关示例（伪排序）
         auto_save_layout = QHBoxLayout()
         auto_save_label = QLabel("启用伪排序：")
@@ -81,21 +96,22 @@ class SettingsPage(QWidget):
         auto_save_layout.addWidget(self.auto_save_checkbox)
         auto_save_layout.addStretch()
         settings_layout.addLayout(auto_save_layout)
-        # 3. 自动删除不在工作目录中的条目（默认关闭）
-        orphan_cleanup_layout = QHBoxLayout()
-        orphan_cleanup_label = QLabel("自动删除孤立条目：")
-        orphan_cleanup_label.setFont(QFont("Segoe UI", 12))
-        self.orphan_cleanup_checkbox = QCheckBox()
-        self.orphan_cleanup_checkbox.setChecked(basic_def.auto_delete_orphaned_entries)
-        self.orphan_cleanup_checkbox.setStyleSheet(
-            "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
-            "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
-            "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
-        )
-        orphan_cleanup_layout.addWidget(orphan_cleanup_label)
-        orphan_cleanup_layout.addWidget(self.orphan_cleanup_checkbox)
-        orphan_cleanup_layout.addStretch()
-        settings_layout.addLayout(orphan_cleanup_layout)
+        # # 3. 自动删除不在工作目录中的条目（默认关闭）（不希望用户误删条目，所以隐藏未经测试的开关）
+        # orphan_cleanup_layout = QHBoxLayout()
+        # orphan_cleanup_label = QLabel("自动删除孤立条目：")
+        # orphan_cleanup_label.setFont(QFont("Segoe UI", 12))
+        # self.orphan_cleanup_checkbox = QCheckBox()
+        # self.orphan_cleanup_checkbox.setChecked(basic_def.auto_delete_orphaned_entries)
+        # self.orphan_cleanup_checkbox.setStyleSheet(
+        #     "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
+        #     "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
+        #     "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
+        # )
+        # orphan_cleanup_layout.addWidget(orphan_cleanup_label)
+        # orphan_cleanup_layout.addWidget(self.orphan_cleanup_checkbox)
+        # orphan_cleanup_layout.addStretch()
+        # settings_layout.addLayout(orphan_cleanup_layout)
+        
         
         # 3. 文件选择器（工作路径）
         work_path_layout = QHBoxLayout()
@@ -261,6 +277,10 @@ class SettingsPage(QWidget):
         except Exception:
             pass
         try:
+            self.restart_sunshine_checkbox.stateChanged.connect(self.on_restart_sunshine_changed)
+        except Exception:
+            pass
+        try:
             self.work_path_btn.clicked.connect(self.on_browse_work_path)
         except Exception:
             pass
@@ -286,6 +306,13 @@ class SettingsPage(QWidget):
             basic_def.save_config()
         except Exception as e:
             print(f"保存 auto_delete_orphaned_entries 失败: {e}")
+
+    def on_restart_sunshine_changed(self, state):
+        try:
+            basic_def.restart_sunshine_after_add = bool(state)
+            basic_def.save_config()
+        except Exception as e:
+            print(f"保存 restart_sunshine_after_add 失败: {e}")
 
     def on_browse_work_path(self):
         try:
