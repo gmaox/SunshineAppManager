@@ -2,7 +2,7 @@
 
 将工作目录所有快捷方式一键导入到sunshine应用程序并自动处理封面<p>
 
-[蓝奏云下载链接](https://wwse.lanzoub.com/b00uymuaha) 密码:9cj7
+<!--[蓝奏云下载链接](https://wwse.lanzoub.com/b00uymuaha) 密码:9cj7-->
 
 界面一览：
 
@@ -12,7 +12,8 @@
 ![屏幕截图 2025-01-11 004411](https://github.com/user-attachments/assets/d36d32de-b27f-4536-9e73-0547b5129462)
 
 
-<p>操作演示：http://b23.tv/6dh80eP
+<p>代码位于dev分支，使用需遵循GPLv3
+
 <p>相关开源项目
 <p>-将playnite游戏导入到sunshine：https://github.com/MichaelMKenny/SunshineAppExport
 <p>-致谢Python-steamgriddb：https://github.com/ZebcoWeb/python-steamgriddb/tree/main
