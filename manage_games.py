@@ -206,16 +206,11 @@ class EditGameCard(QtWidgets.QFrame):
         )
         
         if result_bytes:
-            # 保存bytes到covers目录
-            covers_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
-            os.makedirs(covers_dir, exist_ok=True)
-            cover_path = os.path.join(covers_dir, newname)
-            with open(cover_path, 'wb') as f:
-                f.write(result_bytes)
             self.entry['image-path'] = newname
             if sgdb_name:
                 self.entry['name'] = sgdb_name  # 更新名称如果选择了应用 SGDB 名称
-            save_apps_json(self.apps_json, self.apps_json_path)
+            # 通过管理员进程保存封面与 apps.json
+            save_apps_json(self.apps_json, self.apps_json_path, extra_covers=[(newname, result_bytes)])
             IMAGE_CACHE.clear()
             self.refresh_cb()
 
@@ -226,7 +221,6 @@ class ManageWindow(QtWidgets.QWidget):
         self.setWindowTitle('管理现有游戏')
         self.resize(799, 600)
         self.apps_json_path = os.path.join(APP_INSTALL_PATH, 'config', 'apps.json')
-        os.makedirs(os.path.dirname(self.apps_json_path), exist_ok=True)
         if not os.path.exists(self.apps_json_path):
             save_apps_json({"env": "", "apps": []}, self.apps_json_path)
         self.apps_json = load_apps_json(self.apps_json_path)

@@ -1,4 +1,5 @@
-import os, sys, time, glob, json, re, shutil, threading, configparser, subprocess, urllib3
+import os, sys, time, glob, json, re, shutil, threading, configparser, subprocess, urllib3, tempfile, ctypes, copy
+from ctypes import wintypes
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -85,45 +86,34 @@ def load_apps_json(json_path):
         # 如果文件不存在，返回一个空的基础结构
         return {"env": "", "apps": []}
     
-def save_apps_json(apps_json, file_path):
-    # 处理内存中的封面bytes，保存到covers目录
-    covers_target_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
-    os.makedirs(covers_target_dir, exist_ok=True)
-    
+def save_apps_json(apps_json, file_path, extra_covers=None):
+    """
+    保存 apps.json 与封面到 Sunshine 配置目录。仅在此处临时启动管理员进程完成写入，主程序保持普通权限。
+    extra_covers: 可选 [(filename, bytes), ...]，例如管理界面更换封面时传入。
+    """
+    cover_tuples = []
     for entry in apps_json.get('apps', []):
         cover_bytes = entry.get('cover_bytes')
         if cover_bytes and isinstance(cover_bytes, bytes):
             image_path = entry.get('image-path')
             if image_path:
-                dst_path = os.path.join(covers_target_dir, image_path)
-                try:
-                    with open(dst_path, 'wb') as f:
-                        f.write(cover_bytes)
-                    print(f"已将内存封面保存到 {image_path}")
-                except Exception as e:
-                    print(f"保存封面 {image_path} 失败: {e}")
-            # 移除cover_bytes以避免json中包含bytes
+                cover_tuples.append((image_path, cover_bytes))
             del entry['cover_bytes']
-    
-    # 将更新后的 apps.json 保存到文件
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(apps_json, f, ensure_ascii=False, indent=4)
-    
-    # 将 temp 目录中的所有封面文件一起写入到目标目录
+
+    run_elevated_save(
+        apps_json,
+        file_path,
+        cover_tuples_list=cover_tuples,
+        temp_covers_dir=TEMP_COVERS_DIR if os.path.exists(TEMP_COVERS_DIR) else None,
+        extra_covers=extra_covers,
+    )
+
     if os.path.exists(TEMP_COVERS_DIR):
         try:
-            for filename in os.listdir(TEMP_COVERS_DIR):
-                src_path = os.path.join(TEMP_COVERS_DIR, filename)
-                dst_path = os.path.join(covers_target_dir, filename)
-                if os.path.isfile(src_path):
-                    shutil.copy2(src_path, dst_path)
-                    print(f"已将封面文件 {filename} 写入目标目录")
-            
-            # 清空 temp 目录
             shutil.rmtree(TEMP_COVERS_DIR)
             print("已清空 temp 目录")
         except Exception as e:
-            print(f"处理 temp 封面文件失败: {e}")
+            print(f"清空 temp 目录失败: {e}")
 def load_config():
     """加载配置文件并同步 `folder_selected` 变量"""
     global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add
@@ -215,6 +205,139 @@ def save_config():
             config.write(configfile)
     except Exception as e:
         print(f"保存配置文件时出错: {e}")
+
+
+# ---------- 仅在实际保存 cover 与 apps.json 时以管理员权限运行的逻辑 ----------
+def _run_as_admin_and_wait(exe_path, args):
+    """使用 UAC 以管理员身份启动 exe_path，并等待其结束。成功返回 True，用户取消或失败返回 False。"""
+    SEE_MASK_NOCLOSEPROCESS = 0x00000040
+    SW_HIDE = 0
+    kernel32 = ctypes.windll.kernel32
+    shell32 = ctypes.windll.shell32
+    INFINITE = 0xFFFFFFFF
+
+    class SHELLEXECUTEINFOW(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("fMask", wintypes.DWORD),
+            ("hwnd", wintypes.HWND),
+            ("lpVerb", wintypes.LPCWSTR),
+            ("lpFile", wintypes.LPCWSTR),
+            ("lpParameters", wintypes.LPCWSTR),
+            ("lpDirectory", wintypes.LPCWSTR),
+            ("nShow", wintypes.INT),
+            ("hInstApp", wintypes.HINSTANCE),
+            ("lpIDList", ctypes.c_void_p),
+            ("lpClass", wintypes.LPCWSTR),
+            ("hKeyClass", wintypes.HKEY),
+            ("dwHotKey", wintypes.DWORD),
+            ("hMonitor", wintypes.HANDLE),
+            ("hProcess", wintypes.HANDLE),
+        ]
+
+    sei = SHELLEXECUTEINFOW()
+    sei.cbSize = ctypes.sizeof(SHELLEXECUTEINFOW)
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS
+    sei.hwnd = None
+    sei.lpVerb = "runas"
+    sei.lpFile = exe_path
+    # lpParameters 为命令行参数字符串（不含 exe 路径）
+    param_str = " ".join('"%s"' % str(a).replace('"', r'\"') if " " in str(a) or "\\" in str(a) else str(a) for a in args)
+    sei.lpParameters = param_str if args else None
+    sei.lpDirectory = None
+    sei.nShow = SW_HIDE
+    sei.hInstApp = None
+    sei.lpIDList = None
+    sei.lpClass = None
+    sei.hKeyClass = None
+    sei.dwHotKey = 0
+    sei.hMonitor = None
+    sei.hProcess = None
+
+    # ShellExecuteExW 需要宽字符
+    if not shell32.ShellExecuteExW(ctypes.byref(sei)):
+        err = ctypes.get_last_error()
+        # 用户取消 UAC 通常为 1223 (ERROR_CANCELLED)
+        if err == 1223:
+            print("用户取消了管理员权限请求。")
+        return False
+    if not sei.hProcess or sei.hProcess == 0:
+        return False
+    kernel32.WaitForSingleObject(sei.hProcess, INFINITE)
+    kernel32.CloseHandle(sei.hProcess)
+    return True
+
+
+def do_elevated_save_work(work_dir, apps_json_out_path, covers_dst_path):
+    """
+    在已提升权限的进程中执行：将 work_dir 内的 apps.json 与 covers 写入 Sunshine 配置目录。
+    work_dir 下应有 apps.json 和 covers 子目录（存放封面文件）。
+    """
+    apps_src = os.path.join(work_dir, "apps.json")
+    covers_src = os.path.join(work_dir, "covers")
+    os.makedirs(covers_dst_path, exist_ok=True)
+    apps_out_dir = os.path.dirname(apps_json_out_path)
+    if apps_out_dir:
+        os.makedirs(apps_out_dir, exist_ok=True)
+    if os.path.isfile(apps_src):
+        shutil.copy2(apps_src, apps_json_out_path)
+    if os.path.isdir(covers_src):
+        for name in os.listdir(covers_src):
+            src = os.path.join(covers_src, name)
+            if os.path.isfile(src):
+                shutil.copy2(src, os.path.join(covers_dst_path, name))
+
+
+def run_elevated_save(apps_json_dict, apps_json_path, cover_tuples_list, temp_covers_dir=None, extra_covers=None):
+    """
+    仅在实际写入 cover 与 apps.json 时启动一个管理员权限进程完成写入，主程序保持普通权限。
+    cover_tuples_list: [(filename, bytes), ...]
+    temp_covers_dir: 可选，TEMP_COVERS_DIR 等，其下文件会一并复制到目标 covers 目录。
+    extra_covers: 可选，[(filename, bytes), ...]，与 cover_tuples_list 一起写入。
+    """
+    work_dir = tempfile.mkdtemp(prefix="qsaa_save_")
+    try:
+        # 准备 apps.json（不包含 cover_bytes，否则无法 JSON 序列化）
+        apps_for_save = copy.deepcopy(apps_json_dict)
+        for entry in apps_for_save.get("apps", []):
+            entry.pop("cover_bytes", None)
+        apps_file = os.path.join(work_dir, "apps.json")
+        with open(apps_file, "w", encoding="utf-8") as f:
+            json.dump(apps_for_save, f, ensure_ascii=False, indent=4)
+
+        covers_sub = os.path.join(work_dir, "covers")
+        os.makedirs(covers_sub, exist_ok=True)
+        all_covers = list(cover_tuples_list) if cover_tuples_list else []
+        if extra_covers:
+            all_covers.extend(extra_covers)
+        for name, data in all_covers:
+            if name and data is not None:
+                with open(os.path.join(covers_sub, name), "wb") as f:
+                    f.write(data)
+        if temp_covers_dir and os.path.isdir(temp_covers_dir):
+            for name in os.listdir(temp_covers_dir):
+                src = os.path.join(temp_covers_dir, name)
+                if os.path.isfile(src):
+                    shutil.copy2(src, os.path.join(covers_sub, name))
+
+        covers_dst = os.path.join(APP_INSTALL_PATH, "config", "covers")
+        if getattr(sys, "frozen", False):
+            exe = sys.executable
+            args = ["--elevated-save", "--work-dir", work_dir, "--apps-json-out", apps_json_path, "--covers-dst", covers_dst]
+        else:
+            main_py = os.path.abspath(os.path.join(SCRIPT_DIR, "main.py"))
+            exe = sys.executable
+            args = [main_py, "--elevated-save", "--work-dir", work_dir, "--apps-json-out", apps_json_path, "--covers-dst", covers_dst]
+
+        ok = _run_as_admin_and_wait(exe, args)
+        if not ok:
+            raise PermissionError("需要管理员权限才能保存到 Sunshine 配置目录，请允许 UAC 提升。")
+    finally:
+        try:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        except Exception:
+            pass
+
 
 def _build_unique_shortcut_path(target_folder, base_name):
     """Generate a non-conflicting .lnk path in target folder."""
@@ -1410,13 +1533,10 @@ def runtomain():
 
 
 def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
-    """处理确认添加的条目，将其写入 apps.json。内存封面会在此阶段写入目标目录。"""
+    """处理确认添加的条目，将其写入 apps.json。内存封面通过管理员进程写入目标目录。"""
     global pseudo_sorting_enabled, close_after_completion, restart_sunshine_after_add
 
-    covers_target_dir = os.path.join(APP_INSTALL_PATH, 'config', 'covers')
-    os.makedirs(covers_target_dir, exist_ok=True)
-
-    # 将选中的条目写入 apps.json
+    # 将选中的条目写入 apps.json（封面由 save_apps_json 通过提升权限统一写入）
     for entry in selected_entries:
         shortcut_file = entry["shortcut_file"]
         image_index = entry["image_index"]
@@ -1428,11 +1548,7 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
 
             cover_bytes = entry.get("cover_bytes")
             if cover_bytes:
-                cover_filename = app_entry.get("image-path")
-                if cover_filename:
-                    cover_full_path = os.path.join(covers_target_dir, cover_filename)
-                    with open(cover_full_path, "wb") as f:
-                        f.write(cover_bytes)
+                app_entry["cover_bytes"] = cover_bytes
 
             apps_json["apps"].append(app_entry)
             print(f"新加入: {shortcut_file}")

@@ -1,6 +1,31 @@
+import sys
+
+# 仅保存模式：由普通进程以 runas 拉起，执行写入 cover 与 apps.json 后退出（不启动 GUI）
+if __name__ == "__main__" and "--elevated-save" in sys.argv:
+    argv = sys.argv
+    try:
+        i = argv.index("--elevated-save")
+        work_dir = apps_json_out = covers_dst = None
+        j = i + 1
+        while j < len(argv):
+            if argv[j] == "--work-dir" and j + 1 < len(argv):
+                work_dir, j = argv[j + 1], j + 2
+            elif argv[j] == "--apps-json-out" and j + 1 < len(argv):
+                apps_json_out, j = argv[j + 1], j + 2
+            elif argv[j] == "--covers-dst" and j + 1 < len(argv):
+                covers_dst, j = argv[j + 1], j + 2
+            else:
+                j += 1
+        if work_dir and apps_json_out and covers_dst:
+            from basic_def import do_elevated_save_work
+            do_elevated_save_work(work_dir, apps_json_out, covers_dst)
+            sys.exit(0)
+    except Exception as e:
+        print(e)
+        sys.exit(1)
+
 from PyQt5.QtGui import QFont, QColor, QTextCursor, QTextCharFormat
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QPropertyAnimation, QEasingCurve, QRect, QParallelAnimationGroup
-import sys
 from io import StringIO
 
 from PyQt5.QtWidgets import (
