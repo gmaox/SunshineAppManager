@@ -1,3 +1,4 @@
+import os
 import sys
 
 # 仅保存模式：由普通进程以 runas 拉起，执行写入 cover 与 apps.json 后退出（不启动 GUI）
@@ -23,6 +24,80 @@ if __name__ == "__main__" and "--elevated-save" in sys.argv:
     except Exception as e:
         print(e)
         sys.exit(1)
+
+# CLI 模式：支持选择封面和删除游戏
+if __name__ == "__main__" and ("--choosecover" in sys.argv or "--delete" in sys.argv):
+    # 避免在 GUI 启动前导入 PyQt
+    from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, TEMP_COVERS_DIR
+    from sgdb_cover_window import choose_cover_with_sgdb_qt
+    import uuid
+
+    def _normalize_name(name: str) -> str:
+        return "" if name is None else " ".join(str(name).strip().split()).lower()
+
+    apps_json_path = os.path.join(APP_INSTALL_PATH, "config", "apps.json")
+    if not os.path.exists(apps_json_path):
+        save_apps_json({"env": "", "apps": []}, apps_json_path)
+    apps_json = load_apps_json(apps_json_path)
+
+    args = sys.argv[1:]
+    ok = True
+    i = 0
+    while i < len(args):
+        if args[i] == "--choosecover" and i + 1 < len(args):
+            game_name = args[i + 1]
+            i += 2
+            norm_target = _normalize_name(game_name)
+            # 先做精确匹配，再做包含匹配
+            entry = next((e for e in apps_json.get("apps", []) if _normalize_name(e.get("name")) == norm_target), None)
+            if entry is None:
+                entry = next((e for e in apps_json.get("apps", []) if norm_target in _normalize_name(e.get("name"))), None)
+
+            if not entry:
+                print(f"未找到名称为 '{game_name}' 的游戏，跳过选择封面。")
+                ok = False
+                continue
+
+            exe_path = entry.get("cmd", "")
+            os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
+            newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
+            output_path = os.path.join(TEMP_COVERS_DIR, newname)
+
+            result_bytes, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
+                app_name=entry.get("name", ""),
+                output_path=output_path,
+                exe_path=exe_path,
+            )
+
+            if result_bytes:
+                entry["image-path"] = newname
+                if sgdb_name:
+                    entry["name"] = sgdb_name
+                save_apps_json(apps_json, apps_json_path, extra_covers=[(newname, result_bytes)])
+                print(f"已为 '{entry.get('name')}' 选择封面: {newname}")
+            else:
+                print(f"为 '{entry.get('name')}' 选择封面已取消或失败。")
+
+        elif args[i] == "--delete" and i + 1 < len(args):
+            game_name = args[i + 1]
+            i += 2
+            norm_target = _normalize_name(game_name)
+            before = len(apps_json.get("apps", []))
+            apps_json["apps"] = [
+                e for e in apps_json.get("apps", [])
+                if _normalize_name(e.get("name")) != norm_target
+            ]
+            removed = before - len(apps_json.get("apps", []))
+            if removed:
+                save_apps_json(apps_json, apps_json_path)
+                print(f"已删除 {removed} 个名称为 '{game_name}' 的游戏")
+            else:
+                print(f"未找到名称为 '{game_name}' 的游戏")
+                ok = False
+        else:
+            i += 1
+
+    sys.exit(0 if ok else 1)
 
 from PyQt5.QtGui import QFont, QColor, QTextCursor, QTextCharFormat
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QPropertyAnimation, QEasingCurve, QRect, QParallelAnimationGroup

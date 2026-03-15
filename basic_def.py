@@ -23,7 +23,6 @@ else:
 # 脚本目录下的 temp 文件夹，用于暂存封面文件
 TEMP_COVERS_DIR = os.path.join(SCRIPT_DIR, 'temp')
 hidden_files = []
-skipped_entries = []
 folder_selected = ''
 close_after_completion = True  # 默认开启
 pseudo_sorting_enabled = False  # 新增伪排序适应选项，默认关闭
@@ -462,7 +461,6 @@ def get_dominant_colors(image, num_colors=2):
     return color_thief.get_palette(color_count=num_colors)
 
 def create_image_with_icon(exe_path, output_path ,idx):
-    global skipped_entries  # 声明使用全局变量
     try:
         # 检查是否为 .ico 文件
         if exe_path.lower().endswith('.ico'):
@@ -541,16 +539,10 @@ def create_image_with_icon(exe_path, output_path ,idx):
             os.remove(icon_path)
 
     except Exception as e:
-        print(f"创建图像时发生异常，跳过此文件: {exe_path}\n异常信息: {e}")
-        skipped_entries.append(idx)  # 记录异常条目
+        print(f"创建图像时发生异常: {exe_path}\n异常信息: {e}")
 
 
 def generate_app_entry(lnk_file, index):
-    # 跳过已记录的异常条目
-    if index in skipped_entries:
-        print(f"跳过已记录的异常条目: {lnk_file}")
-        return None  # 返回 None 以表示跳过该条目
-
     # 判断 lnk_file 是否为 .url 文件
     if lnk_file.lower().endswith('.url'):
         entry = {
@@ -1604,47 +1596,6 @@ def generate_steamapp(app_id):
             return None  # 如果图片文件不存在，则返回None
     return image_path
 # ========== 新增：为steam游戏快捷方式优先设置封面 ==========
-def try_set_steam_cover_for_shortcut(app_name, target_path, output_dir, index):
-    """
-    检查 target_path 是否为 steam 游戏快捷方式，若是则尝试用本地 steam 封面，成功返回图片路径，否则返回 None。
-    """
-    import re
-    steamid = None
-    # 检查.lnk/.url文件内容是否包含 steam://rungameid/ 并提取id
-    try:
-        if target_path.lower().endswith('.url'):
-            with open(target_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.startswith("URL=") and "steam://rungameid/" in line:
-                        m = re.search(r'steam://rungameid/(\d+)', line)
-                        if m:
-                            steamid = m.group(1)
-                            break
-    except Exception as e:
-        print(f"检查steam快捷方式失败: {e}")
-        return None
-    if not steamid:
-        return None
-    # 查找本地steam封面
-    steam_base_dir = get_steam_base_dir()
-    if not steam_base_dir:
-        return None
-    image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900.jpg"
-    if not os.path.exists(image_path):
-        image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900_schinese.jpg"
-        if not os.path.exists(image_path):
-            return None
-    # 拷贝图片到 output_dir，文件名采用统一索引方式
-    import shutil
-    output_path = os.path.join(output_dir, f"output_image{index}.png")
-    try:
-        shutil.copy(image_path, output_path)
-        print(f"已为Steam游戏 {app_name} 设置本地封面: {output_path}")
-        return output_path
-    except Exception as e:
-        print(f"拷贝Steam封面失败: {e}")
-        return None
-
 def try_get_steam_cover_bytes_for_shortcut(app_name, target_path):
     """Return steam cover image bytes for shortcut if available, else None."""
     import re
@@ -1672,19 +1623,32 @@ def try_get_steam_cover_bytes_for_shortcut(app_name, target_path):
     image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900.jpg"
     if not os.path.exists(image_path):
         image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900_schinese.jpg"
-        if not os.path.exists(image_path):
-            # 新版Steam可能在子文件夹下有 library_capsule.jpg
-            subdir = os.path.join(steam_base_dir, "appcache", "librarycache", steamid)
-            if os.path.isdir(subdir):
-                # 查找所有子文件夹下的 library_capsule.jpg
-                for root, dirs, files in os.walk(subdir):
-                    if "library_capsule.jpg" in files:
-                        image_path = os.path.join(root, "library_capsule.jpg")
+
+    # 如果以上路径都不存在，尝试在 steamid 目录中搜索任何包含 library_600x900 的文件（例如子文件夹内名称为 library_600x900_schinese.jpg 的情况）
+    if not os.path.exists(image_path):
+        scan_dir = os.path.join(steam_base_dir, "appcache", "librarycache", steamid)
+        if os.path.isdir(scan_dir):
+            for root, dirs, files in os.walk(scan_dir):
+                for fname in files:
+                    if "library_600x900" in fname and fname.lower().endswith(".jpg"):
+                        image_path = os.path.join(root, fname)
                         break
-                else:
-                    return None
+                if os.path.exists(image_path):
+                    break
+
+    # 仍无法找到时，继续尝试旧版的 library_capsule.jpg 查找逻辑
+    if not os.path.exists(image_path):
+        subdir = os.path.join(steam_base_dir, "appcache", "librarycache", steamid)
+        if os.path.isdir(subdir):
+            # 查找所有子文件夹下的 library_capsule.jpg
+            for root, dirs, files in os.walk(subdir):
+                if "library_capsule.jpg" in files:
+                    image_path = os.path.join(root, "library_capsule.jpg")
+                    break
             else:
                 return None
+        else:
+            return None
 
     try:
         with open(image_path, 'rb') as f:
