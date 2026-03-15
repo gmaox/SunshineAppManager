@@ -142,11 +142,10 @@ class LogTab(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
 
-        # 日志显示文本框
+        # 日志显示文本框（背景与文字颜色由全局主题控制，深色模式下会反色）
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Courier New", 10))
-        self.log_text.setStyleSheet("background-color: #f5f5f5;")
         layout.addWidget(self.log_text)
         
         # 清空日志按钮
@@ -420,6 +419,12 @@ class LogTab(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        import basic_def
+        # 加载配置
+        try:
+            basic_def.load_config()
+        except Exception:
+            pass
         self.setWindowTitle("Sunshine App Manager v1.0")
         self.resize(900, 480)
 
@@ -447,6 +452,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.setSpacing(0)
         sidebar.setLayout(sidebar_layout)
         sidebar.setFixedWidth(140)
+        self.sidebar = sidebar
 
         button_group = QButtonGroup(self)
         button_group.setExclusive(True)
@@ -522,10 +528,6 @@ class MainWindow(QMainWindow):
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             btn.setFixedHeight(70)
             btn.setFont(QFont("Segoe UI", 14))
-            btn.setStyleSheet(
-                "QPushButton{border:none;background:#f5f5f5;}"
-                "QPushButton:checked{background:#e8e8e8;font-weight:600;}"
-            )
             sidebar_layout.addWidget(btn)
             button_group.addButton(btn, i)
 
@@ -546,6 +548,9 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.stacked)
 
         self.setCentralWidget(main_widget)
+
+        # 应用初始主题
+        self.apply_theme(basic_def.theme)
     
     def show_confirm_add_window(self, pending_entries, apps_json, apps_json_path, output_folder,
                                 pseudo_sorting_enabled=False, close_after_completion=True):
@@ -602,6 +607,57 @@ class MainWindow(QMainWindow):
         """取消添加时的处理"""
         # 返回到上一个页面（如添加游戏页面）
         self.stacked.setCurrentIndex(0)
+    
+    def apply_theme(self, theme):
+        """应用主题"""
+        if theme == "深色":
+            stylesheet = (
+                "QWidget { background-color: #2b2b2b; color: #ffffff; } "
+                "QPushButton { background-color: #404040; color: #ffffff; border: 1px solid #555555; padding: 5px; border-radius: 3px; } "
+                "QPushButton:hover { background-color: #505050; } "
+                "QPushButton:checked { background-color: #2E7D9B; font-weight: 600; } "
+                "QLineEdit { background-color: #404040; color: #ffffff; border: 1px solid #555555; padding: 5px; } "
+                "QComboBox { background-color: #404040; color: #ffffff; border: 1px solid #555555; padding: 5px; } "
+                "QComboBox QAbstractItemView { background-color: #404040; color: #ffffff; selection-background-color: #2E7D9B; } "
+                "QTextEdit { background-color: #404040; color: #ffffff; border: 1px solid #555555; } "
+                "QPlainTextEdit { background-color: #404040; color: #ffffff; border: 1px solid #555555; } "
+                "QLabel { color: #ffffff; } "
+                "QFrame { background-color: #333333; border: none; } "
+                "QScrollArea { background-color: #2b2b2b; border: none; } "
+                "QCheckBox { color: #ffffff; } "
+                "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; } "
+                "QCheckBox::indicator:unchecked { background: #505050; border: 1px solid #666666; } "
+                "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; } "
+                "QTableWidget { background-color: #404040; color: #ffffff; gridline-color: #555555; } "
+                "QTableWidget::item { background-color: #404040; color: #ffffff; } "
+                "QHeaderView::section { background-color: #505050; color: #ffffff; border: 1px solid #555555; padding: 4px; } "
+                "QListWidget { background-color: #404040; color: #ffffff; } "
+                "QListWidget::item { background-color: #404040; color: #ffffff; } "
+                "QListWidget::item:selected { background-color: #2E7D9B; color: #ffffff; } "
+                "QScrollBar:vertical { background: #2b2b2b; width: 12px; border-radius: 6px; } "
+                "QScrollBar::handle:vertical { background: #505050; border-radius: 6px; min-height: 20px; } "
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; } "
+                "QScrollBar:horizontal { background: #2b2b2b; height: 12px; border-radius: 6px; } "
+                "QScrollBar::handle:horizontal { background: #505050; border-radius: 6px; min-width: 20px; } "
+                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
+            )
+            # 更新侧边栏样式
+            self.sidebar.setStyleSheet("QWidget { background-color: #333333; } QPushButton { border: none; background: #404040; color: #ffffff; } QPushButton:checked { background: #2E7D9B; font-weight: 600; }")
+        elif theme == "经典":
+            # 暂时默认为浅色
+            stylesheet = ""
+            self.sidebar.setStyleSheet("")
+        else:  # 浅色
+            stylesheet = (
+                "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; } "
+                "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; } "
+                "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
+            )
+            self.sidebar.setStyleSheet("QWidget { background-color: #f0f0f0; } QPushButton { border: none; background: #f5f5f5; } QPushButton:checked { background: #e8e8e8; font-weight: 600; }")
+        
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(stylesheet)
 
 
 if __name__ == "__main__":

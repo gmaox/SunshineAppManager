@@ -17,7 +17,7 @@ class ConfirmGameCard(QtWidgets.QFrame):
         self.entry = entry
         self.parent_window = parent_window
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.setStyleSheet('background:white;')
+        # 背景由全局主题控制，深色模式下使用深色背景
         self._setup_ui()
         self.refresh_cover()
 
@@ -28,7 +28,8 @@ class ConfirmGameCard(QtWidgets.QFrame):
         self.cover_lbl = QtWidgets.QLabel('没有封面')
         self.cover_lbl.setFixedSize(80, 120)
         self.cover_lbl.setAlignment(QtCore.Qt.AlignCenter)
-        self.cover_lbl.setStyleSheet('background:#333;color:white')
+        # 封面占位样式由全局主题控制
+        self.cover_lbl.setStyleSheet('')
         self.cover_lbl.setCursor(QtCore.Qt.PointingHandCursor)  # 设置鼠标指针为手型
         self.cover_lbl.mousePressEvent = self.on_cover_click  # 连接点击事件
         h.addWidget(self.cover_lbl)
@@ -42,7 +43,7 @@ class ConfirmGameCard(QtWidgets.QFrame):
         v.addWidget(self.name_lbl)
 
         self.path_lbl = QtWidgets.QLabel('路径: ' + str(self.entry.get('target_path', '')))
-        self.path_lbl.setStyleSheet('color:#666')
+        self.path_lbl.setStyleSheet('')
         self.path_lbl.setWordWrap(True)
         v.addWidget(self.path_lbl)
         v.addStretch()
@@ -230,7 +231,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         # main_layout.addWidget(self.path_lbl)
 
         self.info_label = QtWidgets.QLabel(f'待添加的应用: {len(self.pending_entries)}')
-        self.info_label.setStyleSheet('color: gray;')
+        self.info_label.setStyleSheet('')
         main_layout.addWidget(self.info_label)
 
         h_split = QtWidgets.QHBoxLayout()
@@ -243,6 +244,8 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.scroll = QtWidgets.QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        # 启用触摸滚动支持
+        QtWidgets.QScroller.grabGesture(self.scroll.viewport(), QtWidgets.QScroller.TouchGesture)
 
         self.container = QtWidgets.QWidget()
         self.grid = QtWidgets.QGridLayout(self.container)
@@ -252,7 +255,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         left_layout.addWidget(self.scroll)
 
         self.status_label = QtWidgets.QLabel(f'正在后台生成封面... (0/{len(self.pending_entries)})')
-        self.status_label.setStyleSheet('color:#2E7D9B')
+        self.status_label.setStyleSheet('')
         self.status_label.setMaximumWidth(600)
         self.status_label.setWordWrap(True)
         left_layout.addWidget(self.status_label)
@@ -267,7 +270,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
         # 添加重启提示标签（开关开启时显示）
         self.restart_hint_label = QtWidgets.QLabel('写入会重启sunshine')
-        self.restart_hint_label.setStyleSheet('color:#666;font-size:8px;padding:0px;margin:0px;')
+        self.restart_hint_label.setStyleSheet('font-size:8px;padding:0px;margin:0px;')
         from basic_def import restart_sunshine_after_add as current_value
         self.restart_hint_label.setVisible(current_value)
         bottom.addWidget(self.restart_hint_label)
@@ -297,7 +300,8 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
     def _create_edit_panel(self):
         panel = QtWidgets.QFrame()
-        panel.setStyleSheet('background:#f5f5f5;border-left:1px solid #ddd')
+        # 背景与边框由全局主题控制，深色模式下使用深色背景
+        panel.setStyleSheet('QFrame { border-left: 1px solid #555555; }')
         panel.setFrameShape(QtWidgets.QFrame.StyledPanel)
         layout = QtWidgets.QVBoxLayout(panel)
         layout.setContentsMargins(15, 15, 15, 15)

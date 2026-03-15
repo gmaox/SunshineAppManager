@@ -272,6 +272,8 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         right_l.addWidget(QtWidgets.QLabel("封面候选:"))
         self.scroll = QtWidgets.QScrollArea()
         self.scroll.setWidgetResizable(True)
+        # 启用触摸滚动支持
+        QtWidgets.QScroller.grabGesture(self.scroll.viewport(), QtWidgets.QScroller.TouchGesture)
         self.thumb_wrap = QtWidgets.QWidget()
         self.thumb_grid = QtWidgets.QGridLayout(self.thumb_wrap)
         self.thumb_grid.setContentsMargins(8, 8, 8, 8)

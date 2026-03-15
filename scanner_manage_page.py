@@ -1,4 +1,4 @@
-﻿import glob
+import glob
 import json
 import os
 import re
@@ -577,7 +577,7 @@ class ScannerManagePage(QtWidgets.QWidget):
             "管理扫描器预设，并与现有的忽略列表不並执行扫描。"
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color:#555;")
+        # 文字颜色由全局主题控制，深色模式下为浅色
         root.addWidget(desc)
 
         controls = QtWidgets.QHBoxLayout()

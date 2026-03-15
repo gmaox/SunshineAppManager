@@ -45,7 +45,7 @@ class EditGameCard(QtWidgets.QFrame):
         self.refresh_cb = refresh_cb
         self.manage_window = manage_window  # ManageWindow的引用
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.setStyleSheet('background:white;')
+        # 背景由全局主题控制，深色模式下使用深色背景
         self.init_ui()
 
     def init_ui(self):
@@ -54,7 +54,8 @@ class EditGameCard(QtWidgets.QFrame):
         # cover
         self.cover_lbl = QtWidgets.QLabel('无封面')
         self.cover_lbl.setFixedSize(80, 120)
-        self.cover_lbl.setStyleSheet('background:#333;color:white')
+        # 封面占位背景与文字由全局主题控制（深色 #333 与 white 由主题统一）
+        self.cover_lbl.setStyleSheet('')
         self.cover_lbl.setAlignment(QtCore.Qt.AlignCenter)
         self.cover_lbl.setCursor(QtCore.Qt.PointingHandCursor)  # 设置鼠标指针为手型
         self.cover_lbl.mousePressEvent = self.on_cover_click  # 连接点击事件
@@ -73,7 +74,7 @@ class EditGameCard(QtWidgets.QFrame):
         cmd = self.entry.get('cmd', '')
         # 不截断命令行路径，允许 QLabel 自动换行显示完整内容
         self.cmd_lbl = QtWidgets.QLabel(cmd)
-        self.cmd_lbl.setStyleSheet('color:#666')
+        self.cmd_lbl.setStyleSheet('')
         self.cmd_lbl.setWordWrap(True)
         v.addWidget(self.cmd_lbl)
         v.addStretch()
@@ -248,7 +249,7 @@ class ManageWindow(QtWidgets.QWidget):
         main_layout.addLayout(h)
 
         self.path_lbl = QtWidgets.QLabel('')
-        self.path_lbl.setStyleSheet('color:gray')
+        self.path_lbl.setStyleSheet('')
         main_layout.addWidget(self.path_lbl)
 
         # 左右分割布局
@@ -263,6 +264,8 @@ class ManageWindow(QtWidgets.QWidget):
         self.scroll.setWidgetResizable(True)
         # 禁用横向滚动条，避免横向滚动导致卡片错位
         self.scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        # 启用触摸滚动支持
+        QtWidgets.QScroller.grabGesture(self.scroll.viewport(), QtWidgets.QScroller.TouchGesture)
         self.container = QtWidgets.QWidget()
         self.grid = QtWidgets.QGridLayout(self.container)
         self.grid.setContentsMargins(10, 10, 10, 10)
@@ -298,7 +301,8 @@ class ManageWindow(QtWidgets.QWidget):
     def _create_edit_panel(self):
         """创建右侧编辑面板"""
         panel = QtWidgets.QFrame()
-        panel.setStyleSheet('background:#f5f5f5;border-left:1px solid #ddd')
+        # 仅保留分割线，不设背景以继承全局主题
+        panel.setStyleSheet('QFrame { border-left: 1px solid #555555; }')
         panel.setFrameShape(QtWidgets.QFrame.StyledPanel)
         layout = QtWidgets.QVBoxLayout(panel)
         layout.setContentsMargins(15, 15, 15, 15)

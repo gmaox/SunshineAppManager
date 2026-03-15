@@ -94,7 +94,8 @@ class AddGameWindow(QWidget):
         left_layout.addWidget(run_btn)
         
         left_widget.setLayout(left_layout)
-        left_widget.setStyleSheet("QFrame { border-right: 1px solid #e0e0e0; }")
+        # 仅保留分割线，不设背景以继承全局主题
+        left_widget.setStyleSheet("QFrame { border-right: 1px solid #555555; }")
         # 连接按钮至方法
         run_btn.clicked.connect(runtomain)
         
@@ -134,17 +135,10 @@ class AddGameWindow(QWidget):
         # 扫描器列表
         self.scanner_list = QListWidget()
         self.scanner_list.setMinimumHeight(120)
+        # 背景与文字颜色由全局主题控制，深色模式下会使用深色背景
         self.scanner_list.setStyleSheet(
-            "QListWidget {"
-            "  border: 2px solid #2E7D9B;"
-            "  border-radius: 5px;"
-            "  padding: 5px;"
-            "  background-color: #f9f9f9;"
-            "}"
-            "QListWidget::item:selected {"
-            "  background-color: #2E7D9B;"
-            "  color: white;"
-            "}"
+            "QListWidget { border: 2px solid #2E7D9B; border-radius: 5px; padding: 5px; }"
+            "QListWidget::item:selected { background-color: #2E7D9B; color: white; }"
         )
         right_layout.addWidget(self.scanner_list)
         

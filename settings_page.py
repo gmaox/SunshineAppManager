@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox,
     QComboBox, QLineEdit, QFileDialog, QFrame, QSpacerItem, QSizePolicy,
-    QScrollArea
+    QScrollArea, QScroller
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
@@ -31,6 +31,8 @@ class SettingsPage(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("QScrollArea { border: none; }")
+        # 启用触摸滚动支持
+        QScroller.grabGesture(scroll_area.viewport(), QScroller.TouchGesture)
         
         # 创建内容容器
         content_widget = QWidget()
@@ -55,12 +57,8 @@ class SettingsPage(QWidget):
         enable_notify_label.setFont(QFont("Segoe UI", 12))
         self.enable_notify_checkbox = QCheckBox()
         self.enable_notify_checkbox.setChecked(basic_def.close_after_completion)
-        # 现代开关样式（视觉为滑动开关）
-        self.enable_notify_checkbox.setStyleSheet(
-            "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
-            "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
-            "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
-        )
+        # 开关样式由全局主题控制（深色模式下由 main 的 apply_theme 统一设置）
+        self.enable_notify_checkbox.setStyleSheet("")
         enable_notify_layout.addWidget(enable_notify_label)
         enable_notify_layout.addWidget(self.enable_notify_checkbox)
         enable_notify_layout.addStretch()
@@ -72,11 +70,7 @@ class SettingsPage(QWidget):
         restart_sunshine_label.setFont(QFont("Segoe UI", 12))
         self.restart_sunshine_checkbox = QCheckBox()
         self.restart_sunshine_checkbox.setChecked(basic_def.restart_sunshine_after_add)
-        self.restart_sunshine_checkbox.setStyleSheet(
-            "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
-            "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
-            "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
-        )
+        self.restart_sunshine_checkbox.setStyleSheet("")
         restart_sunshine_layout.addWidget(restart_sunshine_label)
         restart_sunshine_layout.addWidget(self.restart_sunshine_checkbox)
         restart_sunshine_layout.addStretch()
@@ -87,11 +81,7 @@ class SettingsPage(QWidget):
         auto_save_label.setFont(QFont("Segoe UI", 12))
         self.auto_save_checkbox = QCheckBox()
         self.auto_save_checkbox.setChecked(basic_def.pseudo_sorting_enabled)
-        self.auto_save_checkbox.setStyleSheet(
-            "QCheckBox::indicator { width:44px; height:24px; border-radius:12px; }"
-            "QCheckBox::indicator:unchecked { background: #e6e6e6; border: 1px solid #d0d0d0; }"
-            "QCheckBox::indicator:checked { background: #2E7D9B; border: 1px solid #225962; }"
-        )
+        self.auto_save_checkbox.setStyleSheet("")
         auto_save_layout.addWidget(auto_save_label)
         auto_save_layout.addWidget(self.auto_save_checkbox)
         auto_save_layout.addStretch()
@@ -121,7 +111,7 @@ class SettingsPage(QWidget):
         self.work_path_input = QLineEdit()
         self.work_path_input.setPlaceholderText("选择工作路径...")
         self.work_path_input.setReadOnly(True)
-        self.work_path_input.setStyleSheet("QLineEdit { border: none; background-color: #ffffff; padding:6px; }")
+        self.work_path_input.setStyleSheet("QLineEdit { border: none; padding:6px; }")
         # 显示当前配置中的工作路径
         try:
             if getattr(basic_def, 'folder', None):
@@ -163,7 +153,7 @@ class SettingsPage(QWidget):
         self.config_path_input = QLineEdit()
         self.config_path_input.setPlaceholderText("选择配置文件...")
         self.config_path_input.setReadOnly(True)
-        self.config_path_input.setStyleSheet("QLineEdit { border: none; color: #666666; background-color: #f5f5f5; padding:6px; }")
+        self.config_path_input.setStyleSheet("QLineEdit { border: none; padding:6px; }")
         # 显示当前 config.ini 路径
         try:
             self.config_path_input.setText(os.path.join(basic_def.APP_INSTALL_PATH, 'config', 'apps.json'))
@@ -184,7 +174,7 @@ class SettingsPage(QWidget):
         language_combo.setMinimumHeight(34)
         language_combo.setFont(QFont("Segoe UI", 12))
         language_combo.setStyleSheet(
-            "QComboBox{ padding:6px 10px; border-radius:6px; border:1px solid #d0d0d0; background:white; }"
+            "QComboBox{ padding:6px 10px; border-radius:6px; }"
             "QComboBox QAbstractItemView{ selection-background-color:#2E7D9B; }"
         )
         language_layout.addWidget(language_label)
@@ -197,25 +187,22 @@ class SettingsPage(QWidget):
         theme_label = QLabel("主题：")
         theme_label.setFont(QFont("Segoe UI", 12))
         theme_combo = QComboBox()
-        theme_combo.addItems(["浅色", "深色", "自动"])
-        theme_combo.setCurrentIndex(0)
+        theme_combo.addItems(["深色", "浅色", "经典"])
+        theme_combo.setCurrentText(basic_def.theme)
         theme_combo.setMinimumHeight(34)
         theme_combo.setFont(QFont("Segoe UI", 12))
         theme_combo.setStyleSheet(
-            "QComboBox{ padding:6px 10px; border-radius:6px; border:1px solid #d0d0d0; background:white; }"
+            "QComboBox{ padding:6px 10px; border-radius:6px; }"
             "QComboBox QAbstractItemView{ selection-background-color:#2E7D9B; }"
         )
+        self.theme_combo = theme_combo
         theme_layout.addWidget(theme_label)
         theme_layout.addWidget(theme_combo)
         theme_layout.addStretch()
         settings_layout.addLayout(theme_layout)
-        
-        
+        # 边框与背景由全局主题控制，深色模式下会使用深色背景
+        settings_frame.setStyleSheet("QFrame { border: none; }")
         settings_frame.setLayout(settings_layout)
-        # 移除边框以去掉顶部小灰色圆角装饰，保留背景色
-        settings_frame.setStyleSheet(
-            "QFrame { border: none; background-color: #fafafa; }"
-        )
         
         content_layout.addWidget(settings_frame)
         
@@ -244,9 +231,8 @@ class SettingsPage(QWidget):
         about_layout.addWidget(about_text)
         
         about_frame.setLayout(about_layout)
-        about_frame.setStyleSheet(
-            "QFrame { border: 1px solid #e0e0e0; border-radius: 5px; background-color: #f0f5ff; }"
-        )
+        # 边框与背景由全局主题控制，深色模式下使用深色背景与浅色文字
+        about_frame.setStyleSheet("QFrame { border-radius: 5px; }")
         
         content_layout.addWidget(about_frame)
         
@@ -282,6 +268,10 @@ class SettingsPage(QWidget):
             pass
         try:
             self.work_path_btn.clicked.connect(self.on_browse_work_path)
+        except Exception:
+            pass
+        try:
+            self.theme_combo.currentTextChanged.connect(self.on_theme_changed)
         except Exception:
             pass
 
@@ -348,3 +338,14 @@ class SettingsPage(QWidget):
                 os.startfile(work_path)
         except Exception as e:
             print(f"打开工作路径失败: {e}")
+    
+    def on_theme_changed(self, theme):
+        try:
+            basic_def.theme = theme
+            basic_def.save_config()
+            # 应用主题到主窗口（在堆栈控件中时 parent() 可能不是 MainWindow）
+            main_window = self.window()
+            if hasattr(main_window, 'apply_theme'):
+                main_window.apply_theme(theme)
+        except Exception as e:
+            print(f"保存主题失败: {e}")

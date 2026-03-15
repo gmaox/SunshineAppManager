@@ -29,6 +29,7 @@ close_after_completion = True  # 默认开启
 pseudo_sorting_enabled = False  # 新增伪排序适应选项，默认关闭
 auto_delete_orphaned_entries = False  # 自动删除孤立条目（不再询问），默认关闭
 restart_sunshine_after_add = False  # 添加后重启sunshine，默认关闭
+theme = "深色"  # 主题设置，默认为深色
 
 def get_app_install_path():
     app_name = "sunshine"
@@ -114,7 +115,7 @@ def save_apps_json(apps_json, file_path, extra_covers=None):
             print(f"清空 temp 目录失败: {e}")
 def load_config():
     """加载配置文件并同步 `folder_selected` 变量"""
-    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add
+    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme
     # 优先使用 UTF-8 打开配置文件以避免系统默认编码（如 GBK）导致的 UnicodeDecodeError。
     # 如果文件不存在则跳过，后续会调用 save_config() 创建默认文件。
     if os.path.exists(config_file_path):
@@ -147,6 +148,8 @@ def load_config():
     auto_delete_orphaned_entries = config.getboolean('Settings', 'auto_delete_orphaned_entries', fallback=False)
     # 新增 restart_sunshine_after_add
     restart_sunshine_after_add = config.getboolean('Settings', 'restart_sunshine_after_add', fallback=False)
+    # 新增 theme
+    theme = config.get('Settings', 'theme', fallback='深色')
     if os.path.exists(config_file_path)==False:
         save_config()  #没有配置文件保存下
     # 检查 folder 是否有效
@@ -165,7 +168,7 @@ def load_config():
 def save_config():
     """保存选择的目录到配置文件"""
     try:
-        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add  # 添加全局变量声明
+        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme  # 添加全局变量声明
         # 优先使用运行时的 `folder_selected`，保持一致性
         if folder_selected:
             folder = folder_selected
@@ -186,7 +189,9 @@ def save_config():
             # 新增 auto_delete_orphaned_entries
             'auto_delete_orphaned_entries': str(auto_delete_orphaned_entries),
             # 新增 restart_sunshine_after_add
-            'restart_sunshine_after_add': str(restart_sunshine_after_add)
+            'restart_sunshine_after_add': str(restart_sunshine_after_add),
+            # 新增 theme
+            'theme': theme
         }
         
         # 保留 ignored_apps 如果存在
