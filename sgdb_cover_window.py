@@ -488,16 +488,20 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         self._set_status(f"获取封面失败: {message}")
 
     def _start_load_thumb(self, token, idx, grid):
-        thumb_url = grid.get("thumb") or grid.get("url")
+        thumb_url = grid.get("url") or grid.get("thumb")
 
         def worker():
             try:
                 raw = _download_cdn_bytes(thumb_url, self.sgdb, timeout=(8, 20))
-                pix = QtGui.QPixmap()
-                if raw and pix.loadFromData(raw):
-                    self.thumb_done.emit(token, idx, pix)
+                if raw:
+                    grid['cached_bytes'] = raw  # 缓存下载的字节
+                    pix = QtGui.QPixmap()
+                    if pix.loadFromData(raw):
+                        self.thumb_done.emit(token, idx, pix)
+                    else:
+                        self.thumb_error.emit(token, idx, "无法解码图片")
                 else:
-                    self.thumb_error.emit(token, idx, "无法解码图片")
+                    self.thumb_error.emit(token, idx, "下载失败")
             except Exception as e:
                 self.thumb_error.emit(token, idx, str(e))
 
@@ -531,6 +535,20 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         grid = self._grid_data[idx]
         self._set_status(f"正在下载封面: {self.selected_game_name or self.app_name}")
 
+        # 使用缓存的字节，如果有的话
+        cached_raw = grid.get('cached_bytes')
+        if cached_raw:
+            try:
+                final_bytes = _prepare_cover_bytes(cached_raw)
+                if final_bytes:
+                    sgdb_name = self.selected_game_name if self.apply_name_chk.isChecked() and self.selected_game_name else None
+                    self.cover_saved.emit(final_bytes, sgdb_name)
+                    return
+            except Exception as e:
+                self.cover_error.emit(str(e))
+                return
+
+        # 如果没有缓存，下载
         candidate_urls = [grid.get("url"), grid.get("thumb")]
 
         def worker():
