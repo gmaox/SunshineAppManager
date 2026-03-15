@@ -1668,7 +1668,18 @@ def try_get_steam_cover_bytes_for_shortcut(app_name, target_path):
     if not os.path.exists(image_path):
         image_path = f"{steam_base_dir}/appcache/librarycache/{steamid}/library_600x900_schinese.jpg"
         if not os.path.exists(image_path):
-            return None
+            # 新版Steam可能在子文件夹下有 library_capsule.jpg
+            subdir = os.path.join(steam_base_dir, "appcache", "librarycache", steamid)
+            if os.path.isdir(subdir):
+                # 查找所有子文件夹下的 library_capsule.jpg
+                for root, dirs, files in os.walk(subdir):
+                    if "library_capsule.jpg" in files:
+                        image_path = os.path.join(root, "library_capsule.jpg")
+                        break
+                else:
+                    return None
+            else:
+                return None
 
     try:
         with open(image_path, 'rb') as f:

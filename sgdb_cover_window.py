@@ -249,14 +249,6 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         self.search_btn = QtWidgets.QPushButton("搜索")
         self.search_btn.clicked.connect(lambda: self._start_search(self.search_edit.text().strip()))
         top.addWidget(self.search_btn)
-
-        self.browser_btn = QtWidgets.QPushButton("在浏览器中查找")
-        self.browser_btn.clicked.connect(self._open_browser_search_helper)
-        top.addWidget(self.browser_btn)
-
-        self.local_btn = QtWidgets.QPushButton("选择本地图片")
-        self.local_btn.clicked.connect(self._select_local_image)
-        top.addWidget(self.local_btn)
         main.addLayout(top)
 
         split = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
@@ -298,9 +290,21 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 
         bottom = QtWidgets.QHBoxLayout()
         bottom.addStretch()
-        cancel_btn = QtWidgets.QPushButton("关闭并使用默认封面")
+        self.sgdb_btn = QtWidgets.QPushButton("查看SGDB网页")
+        self.sgdb_btn.clicked.connect(self._open_sgdb_page)
+        bottom.addWidget(self.sgdb_btn)
+        self.browser_btn = QtWidgets.QPushButton("在浏览器中查找")
+        self.browser_btn.clicked.connect(self._open_browser_search_helper)
+        bottom.addWidget(self.browser_btn)
+
+        self.local_btn = QtWidgets.QPushButton("选择本地图片")
+        self.local_btn.clicked.connect(self._select_local_image)
+        bottom.addWidget(self.local_btn)
+
+        cancel_btn = QtWidgets.QPushButton("关闭")
         cancel_btn.clicked.connect(self.reject)
         bottom.addWidget(cancel_btn)
+
         main.addLayout(bottom)
 
     def _bind_signals(self):
@@ -329,6 +333,34 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         try:
             query = quote(name)
             url = f"https://www.bing.com/images/search?q={query}"
+            webbrowser.open(url)
+        except Exception as e:
+            self._set_status(f"打开浏览器失败: {e}")
+            return
+
+        hint = ClipboardCoverHintWindow(self)
+        self._clipboard_hint_window = hint
+        hint.show()
+
+    def _open_sgdb_page(self):
+        name = (self.search_edit.text() or "").strip() or (self.app_name or "").strip()
+        if not name:
+            self._set_status("请输入游戏名称后再查看SGDB网页")
+            return
+
+        # 检查是否有选中的游戏
+        item = self.game_list.currentItem()
+        if item:
+            payload = item.data(QtCore.Qt.UserRole) or {}
+            game_id = payload.get("id")
+            if game_id:
+                url = f"https://www.steamgriddb.com/game/{game_id}"
+            else:
+                url = f"https://www.steamgriddb.com/search/grids?term={quote(name)}"
+        else:
+            url = f"https://www.steamgriddb.com/search/grids?term={quote(name)}"
+
+        try:
             webbrowser.open(url)
         except Exception as e:
             self._set_status(f"打开浏览器失败: {e}")
