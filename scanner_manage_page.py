@@ -569,7 +569,7 @@ class ScannerManagePage(QtWidgets.QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
 
-        title = QtWidgets.QLabel("扫描器管理")
+        title = QtWidgets.QLabel("扫描器管理（beta功能，目前只推荐使用steam和epic扫描器）")
         title.setFont(QtGui.QFont("Segoe UI", 16, QtGui.QFont.Bold))
         root.addWidget(title)
 

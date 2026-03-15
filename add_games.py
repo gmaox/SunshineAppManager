@@ -1,6 +1,11 @@
+import os
+
+import psutil
+import win32gui
+import win32process
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QListWidget,
-    QListWidgetItem, QFrame, QMessageBox
+    QListWidgetItem, QFrame, QMessageBox, QDialog, QFileDialog
 )
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
@@ -105,10 +110,36 @@ class AddGameWindow(QWidget):
         right_layout.setContentsMargins(12, 20, 12, 20)
         right_layout.setSpacing(15)
         
-        # 标题
+        # 标题 + 右上角悬浮按钮
         right_title = QLabel("运作扫描器")
         right_title.setFont(QFont("Segoe UI", 16, QFont.Bold))
-        right_layout.addWidget(right_title)
+
+        add_running_btn = QPushButton("添加运行中游戏")
+        add_running_btn.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        add_running_btn.setFixedHeight(34)
+        add_running_btn.setStyleSheet(
+            "QPushButton {"
+            "  background-color: #2E7D9B;"
+            "  color: white;"
+            "  border: none;"
+            "  border-radius: 5px;"
+            "  padding: 6px 12px;"
+            "}"
+            "QPushButton:hover {"
+            "  background-color: #245A71;"
+            "}"
+            "QPushButton:pressed {"
+            "  background-color: #1C4455;"
+            "}"
+        )
+        self.add_running_btn = add_running_btn
+        add_running_btn.clicked.connect(self.quick_add_running_game)
+
+        title_layout = QHBoxLayout()
+        title_layout.addWidget(right_title)
+        title_layout.addStretch()
+        title_layout.addWidget(add_running_btn)
+        right_layout.addLayout(title_layout)
         
         # 说明文本 - 第一段
         right_desc1 = QLabel("扫描器能便捷的添加游戏至添加列表（工作文件夹）")
@@ -318,3 +349,159 @@ class AddGameWindow(QWidget):
                     break
 
         event.acceptProposedAction()
+
+    def quick_add_running_game(self):
+        """快速添加运行中游戏"""
+        scale = 1.0
+        proc_dialog = QDialog(self)
+        proc_dialog.setWindowTitle("选择运行中游戏进程")
+        proc_dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
+        proc_dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: rgba(46, 46, 46, 0.98);
+                border-radius: {int(10 * scale)}px;
+                border: {int(2 * scale)}px solid #444444;
+            }}
+        """)
+
+        vbox = QVBoxLayout(proc_dialog)
+        vbox.setSpacing(int(10 * scale))
+        vbox.setContentsMargins(
+            int(20 * scale),
+            int(20 * scale),
+            int(20 * scale),
+            int(20 * scale)
+        )
+
+        label = QLabel(
+            "选择一个运行中游戏进程，加入到游戏列表。"
+        )
+        label.setStyleSheet("color: white; font-size: 16px;")
+        label.setWordWrap(True)
+        vbox.addWidget(label)
+
+        # 枚举所有有前台窗口且不是隐藏的进程
+        hwnd_pid_map = {}
+        def enum_window_callback(hwnd, lParam):
+            if win32gui.IsWindowVisible(hwnd) and win32gui.GetWindowText(hwnd):
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                hwnd_pid_map[pid] = hwnd
+            return True
+        win32gui.EnumWindows(enum_window_callback, None)
+
+        proc_list = []
+        for proc in psutil.process_iter(['pid', 'name', 'exe']):
+            try:
+                pid = proc.info.get('pid')
+                name = proc.info.get('name', '')
+                exe = proc.info.get('exe', '')
+                if (
+                    not pid
+                    or pid not in hwnd_pid_map
+                    or not exe
+                    or name.lower() in ("explorer.exe", "desktopgame.exe", "textinputhost.exe")
+                ):
+                    continue
+                proc_list.append(proc)
+            except Exception:
+                continue
+
+        if not proc_list:
+            label2 = QLabel("没有检测到可用进程")
+            label2.setStyleSheet("color: white; font-size: 16px;")
+            vbox.addWidget(label2)
+        else:
+            for proc in proc_list:
+                proc_name = proc.info.get('name', '未知')
+                proc_exe = proc.info.get('exe', '')
+
+                hbox = QHBoxLayout()
+                hbox.setSpacing(8)
+
+                btn = QPushButton(f"{proc_name} ({proc_exe})")
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: #444444;
+                        color: white;
+                        border-radius: {int(8 * scale)}px;
+                        font-size: {int(14 * scale)}px;
+                        padding: {int(8 * scale)}px;
+                        text-align: left;
+                    }}
+                    QPushButton:hover {{
+                        background-color: #555555;
+                    }}
+                """)
+                btn.clicked.connect(
+                    lambda checked, exe=proc_exe: self._quick_add_and_notify(exe, proc_dialog)
+                )
+                hbox.addWidget(btn)
+
+                folder_btn = QPushButton("📁")
+                folder_btn.setFixedSize(32, 32)
+                folder_btn.setStyleSheet(
+                    "QPushButton {"
+                    "  background-color: #666666;"
+                    "  color: white;"
+                    "  border-radius: 6px;"
+                    "  font-size: 18px;"
+                    "  padding: 0px;"
+                    "}"
+                    "QPushButton:hover {"
+                    "  background-color: #888888;"
+                    "}"
+                )
+
+                def open_file_dialog(proc_exe=proc_exe):
+                    start_dir = os.path.dirname(proc_exe) if proc_exe and os.path.exists(proc_exe) else ""
+                    file_dialog = QFileDialog(proc_dialog)
+                    file_dialog.setWindowTitle("手动选择要添加的游戏文件")
+                    file_dialog.setNameFilter("可执行文件 (*.exe *.lnk)")
+                    file_dialog.setFileMode(QFileDialog.ExistingFile)
+                    if start_dir:
+                        file_dialog.setDirectory(start_dir)
+                    if file_dialog.exec_():
+                        selected_file = file_dialog.selectedFiles()[0]
+                        self._quick_add_and_notify(selected_file, proc_dialog)
+
+                folder_btn.clicked.connect(
+                    lambda checked, proc_exe=proc_exe: open_file_dialog(proc_exe)
+                )
+                hbox.addWidget(folder_btn)
+                vbox.addLayout(hbox)
+
+        proc_dialog.setLayout(vbox)
+        proc_dialog.show()
+
+        # 将对话框定位到“添加运行中游戏”按钮右上角对齐
+        try:
+            btn_pos = self.add_running_btn.mapToGlobal(self.add_running_btn.rect().topLeft())
+            dlg_size = proc_dialog.sizeHint()
+            x = btn_pos.x() + self.add_running_btn.width() - dlg_size.width()
+            y = btn_pos.y() + self.add_running_btn.height() + 6
+            proc_dialog.move(x, y)
+        except Exception:
+            pass
+
+    def _quick_add_and_notify(self, exe_path, dialog):
+        """添加游戏并提示"""
+        dialog.accept()
+        result = add_files_to_work_folder_as_shortcuts([exe_path])
+        created = len(result.get('created', []))
+        skipped = len(result.get('skipped', []))
+        errors = len(result.get('errors', []))
+
+        lines = [f"已在工作文件夹创建 {created} 个快捷方式。"]
+        if skipped:
+            lines.append(f"已跳过 {skipped} 个不支持文件。")
+        if errors:
+            lines.append(f"有 {errors} 个文件处理失败，请查看日志页。")
+        msg = "\n".join(lines)
+
+        from PyQt5.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            for w in app.topLevelWidgets():
+                if hasattr(w, 'log_tab'):
+                    w.log_tab.show_success_notification(msg)
+                    break
