@@ -23,6 +23,6 @@
 
 **SunshineAppManager之外的东西**
   
-  我的自制游戏前端：[DeskGamix](https://github.com/gmaox/DeskGamix)<p>
+  我的自制游戏前端：[Simplenite](https://github.com/gmaox/DeskGamix)<p>
   这个游戏前端和SunshineAppManager强绑定，也就是说添加的游戏可直接在我的前端里启动-在非串流时使用～
   
