@@ -128,7 +128,7 @@ class ConfirmGameCard(QtWidgets.QFrame):
         from basic_def import TEMP_COVERS_DIR
         import os
         os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
-        newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
+        newname = f"sgdb_{uuid.uuid4().hex[:8]}.png"
         output_path = os.path.join(TEMP_COVERS_DIR, newname)
         
         result_bytes, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
@@ -504,9 +504,9 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             img = Image.open(fp)
             img = img.resize((600, 900), Image.LANCZOS)
 
-            newname = f'custom_{uuid.uuid4().hex[:8]}.jpg'
+            newname = f'custom_{uuid.uuid4().hex[:8]}.png'
             buf = BytesIO()
-            img.save(buf, 'JPEG', quality=95)
+            img.save(buf, 'PNG')
 
             entry['cover_bytes'] = buf.getvalue()
             entry['image-path'] = newname

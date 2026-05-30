@@ -186,9 +186,9 @@ class EditGameCard(QtWidgets.QFrame):
             # 先写入到 temp 目录
             os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
             
-            newname = f"custom_{uuid.uuid4().hex[:8]}.jpg"
+            newname = f"custom_{uuid.uuid4().hex[:8]}.png"
             temp_path = os.path.join(TEMP_COVERS_DIR, newname)
-            img.save(temp_path, 'JPEG', quality=95)
+            img.save(temp_path, 'PNG')
             
             self.entry['image-path'] = format_image_path_for_apps_json(newname)
             save_apps_json(self.apps_json, self.apps_json_path)
@@ -204,7 +204,7 @@ class EditGameCard(QtWidgets.QFrame):
         
         # 确定输出路径
         os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
-        newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
+        newname = f"sgdb_{uuid.uuid4().hex[:8]}.png"
         output_path = os.path.join(TEMP_COVERS_DIR, newname)
         
         result_bytes, used_icon, sgdb_name = choose_cover_with_sgdb_qt(

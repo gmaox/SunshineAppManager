@@ -66,6 +66,52 @@ def cover_filename_from_image_path(image_path):
     return os.path.basename(str(image_path).replace("/", os.sep))
 
 
+def ensure_cover_png_filename(filename):
+    if not filename:
+        return filename
+    name = cover_filename_from_image_path(filename)
+    base, _ = os.path.splitext(name)
+    return f"{base}.png"
+
+
+def ensure_cover_png_bytes(raw_bytes):
+    """将封面图像字节统一转换为 600x900 的 PNG 格式。"""
+    if not raw_bytes:
+        return None
+    try:
+        with Image.open(BytesIO(raw_bytes)) as image:
+            if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+                image = image.convert("RGBA")
+            else:
+                image = image.convert("RGB")
+            if image.size != (600, 900):
+                image = image.resize((600, 900), Image.LANCZOS)
+            output = BytesIO()
+            image.save(output, format="PNG")
+            return output.getvalue()
+    except Exception:
+        return None
+
+
+def normalize_cover_for_disk(filename, data):
+    """将封面文件名与内容规范为 PNG，供写入磁盘使用。"""
+    png_name = ensure_cover_png_filename(filename)
+    png_data = ensure_cover_png_bytes(data)
+    return png_name, png_data
+
+
+def sync_apps_json_image_paths_to_png(apps_json):
+    """确保 apps.json 中 image-path 的文件名后缀与磁盘 PNG 封面一致。"""
+    for entry in apps_json.get("apps", []):
+        image_path = entry.get("image-path")
+        if not image_path:
+            continue
+        old_name = cover_filename_from_image_path(image_path)
+        new_name = ensure_cover_png_filename(old_name)
+        if new_name != old_name:
+            entry["image-path"] = format_image_path_for_apps_json(new_name)
+
+
 def format_image_path_for_apps_json(cover_filename):
     """将封面文件名格式化为写入 apps.json 的 image-path 值。"""
     if not cover_filename:
@@ -129,15 +175,29 @@ def save_apps_json(apps_json, file_path, extra_covers=None):
         if cover_bytes and isinstance(cover_bytes, bytes):
             image_path = entry.get('image-path')
             if image_path:
-                cover_tuples.append((cover_filename_from_image_path(image_path), cover_bytes))
+                filename = ensure_cover_png_filename(cover_filename_from_image_path(image_path))
+                png_bytes = ensure_cover_png_bytes(cover_bytes)
+                if png_bytes:
+                    cover_tuples.append((filename, png_bytes))
+                    if filename != cover_filename_from_image_path(image_path):
+                        entry['image-path'] = format_image_path_for_apps_json(filename)
             del entry['cover_bytes']
+
+    normalized_extra = []
+    if extra_covers:
+        for name, data in extra_covers:
+            png_name, png_data = normalize_cover_for_disk(name, data)
+            if png_name and png_data:
+                normalized_extra.append((png_name, png_data))
+
+    sync_apps_json_image_paths_to_png(apps_json)
 
     run_elevated_save(
         apps_json,
         file_path,
         cover_tuples_list=cover_tuples,
         temp_covers_dir=TEMP_COVERS_DIR if os.path.exists(TEMP_COVERS_DIR) else None,
-        extra_covers=extra_covers,
+        extra_covers=normalized_extra or None,
     )
 
     if os.path.exists(TEMP_COVERS_DIR):
@@ -334,6 +394,7 @@ def run_elevated_save(apps_json_dict, apps_json_path, cover_tuples_list, temp_co
         apps_for_save = copy.deepcopy(apps_json_dict)
         for entry in apps_for_save.get("apps", []):
             entry.pop("cover_bytes", None)
+        sync_apps_json_image_paths_to_png(apps_for_save)
         apps_file = os.path.join(work_dir, "apps.json")
         with open(apps_file, "w", encoding="utf-8") as f:
             json.dump(apps_for_save, f, ensure_ascii=False, indent=4)
@@ -344,14 +405,20 @@ def run_elevated_save(apps_json_dict, apps_json_path, cover_tuples_list, temp_co
         if extra_covers:
             all_covers.extend(extra_covers)
         for name, data in all_covers:
-            if name and data is not None:
-                with open(os.path.join(covers_sub, name), "wb") as f:
-                    f.write(data)
+            png_name, png_data = normalize_cover_for_disk(name, data)
+            if png_name and png_data:
+                with open(os.path.join(covers_sub, png_name), "wb") as f:
+                    f.write(png_data)
         if temp_covers_dir and os.path.isdir(temp_covers_dir):
             for name in os.listdir(temp_covers_dir):
                 src = os.path.join(temp_covers_dir, name)
                 if os.path.isfile(src):
-                    shutil.copy2(src, os.path.join(covers_sub, name))
+                    with open(src, "rb") as f:
+                        raw = f.read()
+                    png_name, png_data = normalize_cover_for_disk(name, raw)
+                    if png_name and png_data:
+                        with open(os.path.join(covers_sub, png_name), "wb") as f:
+                            f.write(png_data)
 
         covers_dst = os.path.join(APP_INSTALL_PATH, "config", "covers")
         if getattr(sys, "frozen", False):
@@ -1152,10 +1219,11 @@ def _download_sgdb_cover_bytes(url, sgdb_client):
                 image = image.resize((600, 900), Image.LANCZOS)
 
             output = BytesIO()
-            image.save(output, format="JPEG", quality=95)
+            image.save(output, format="PNG")
             return output.getvalue()
     except Exception:
-        return raw_bytes
+        png_bytes = ensure_cover_png_bytes(raw_bytes)
+        return png_bytes if png_bytes else raw_bytes
 
 
 def try_get_sgdb_cover_bytes_for_entry(app_name, target_path, shortcut_file, sgdb_client=None):

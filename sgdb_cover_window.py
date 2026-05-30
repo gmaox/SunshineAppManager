@@ -152,7 +152,7 @@ def _prepare_cover_bytes(raw_bytes):
         if image.size != (600, 900):
             image = image.resize((600, 900), Image.LANCZOS)
         output = BytesIO()
-        image.save(output, format="JPEG", quality=95)
+        image.save(output, format="PNG")
         return output.getvalue()
 
 
@@ -609,10 +609,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
                 final_image = local_image.crop((x, y, x + target_size[0], y + target_size[1]))
 
                 output = BytesIO()
-                if self.output_path.lower().endswith(".png"):
-                    final_image.save(output, "PNG")
-                else:
-                    final_image.save(output, "JPEG", quality=95)
+                final_image.save(output, "PNG")
                 final_bytes = output.getvalue()
 
             self.result_bytes = final_bytes
@@ -708,10 +705,7 @@ class ClipboardCoverHintWindow(QtWidgets.QDialog):
                 final_image = pil_image.crop((x, y, x + target_size[0], y + target_size[1]))
 
                 output = BytesIO()
-                if str(self.parent_dialog.output_path or "").lower().endswith(".png"):
-                    final_image.save(output, "PNG")
-                else:
-                    final_image.save(output, "JPEG", quality=95)
+                final_image.save(output, "PNG")
                 final_bytes = output.getvalue()
 
             self.parent_dialog.result_bytes = final_bytes

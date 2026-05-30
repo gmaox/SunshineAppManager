@@ -60,7 +60,7 @@ if __name__ == "__main__" and ("--choosecover" in sys.argv or "--delete" in sys.
 
             exe_path = entry.get("cmd", "")
             os.makedirs(TEMP_COVERS_DIR, exist_ok=True)
-            newname = f"sgdb_{uuid.uuid4().hex[:8]}.jpg"
+            newname = f"sgdb_{uuid.uuid4().hex[:8]}.png"
             output_path = os.path.join(TEMP_COVERS_DIR, newname)
 
             result_bytes, used_icon, sgdb_name = choose_cover_with_sgdb_qt(
