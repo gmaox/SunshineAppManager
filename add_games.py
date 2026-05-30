@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
-from basic_def import runtomain, add_files_to_work_folder_as_shortcuts
+from basic_def import runtomain, add_files_to_work_folder_as_shortcuts, notify_run_error, get_covers_dir
 from scanner_add_page import load_scanners, save_scanners
 from scanner_manage_page import run_scanner, _load_ignored_targets, _get_work_folder
 
@@ -19,6 +19,24 @@ class AddGameWindow(QWidget):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.init_ui()
+
+    def _safe_runtomain(self):
+        try:
+            runtomain()
+        except PermissionError as e:
+            notify_run_error(
+                f"无法访问 Sunshine 配置目录，可能需要管理员权限。\n\n"
+                f"目标路径: {get_covers_dir()}\n\n"
+                f"详情: {e}"
+            )
+        except OSError as e:
+            notify_run_error(
+                f"访问 Sunshine 配置路径时出错。\n\n"
+                f"目标路径: {get_covers_dir()}\n\n"
+                f"详情: {e}"
+            )
+        except Exception as e:
+            notify_run_error(f"运行失败: {e}")
     
     def init_ui(self):
         """初始化UI界面"""
@@ -102,7 +120,7 @@ class AddGameWindow(QWidget):
         # 仅保留分割线，不设背景以继承全局主题
         left_widget.setStyleSheet("QFrame { border-right: 1px solid #555555; }")
         # 连接按钮至方法
-        run_btn.clicked.connect(runtomain)
+        run_btn.clicked.connect(self._safe_runtomain)
         
         # ========== 右侧：运作扫描器 ==========
         right_widget = QFrame()

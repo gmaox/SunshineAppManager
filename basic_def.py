@@ -864,6 +864,27 @@ def find_unused_index(apps_json, image_target_paths):
         index += 1
     return index
 
+def get_sunshine_apps_json_path():
+    return os.path.join(APP_INSTALL_PATH, "config", "apps.json")
+
+
+def safe_path_exists(path):
+    try:
+        return os.path.exists(path)
+    except OSError:
+        return False
+
+
+def notify_run_error(message):
+    print(message)
+    try:
+        app = QtWidgets.QApplication.instance()
+        if app:
+            QtWidgets.QMessageBox.critical(None, "错误", message)
+    except Exception:
+        pass
+
+
 def initialize():
     global folder_selected, lnkandurl_files, output_folder, apps_json_path, target_paths, lnk_files, url_files
     # 确保 folder_selected 已设置，避免 os.chdir('') 导致 OSError
@@ -873,14 +894,14 @@ def initialize():
         # 回退到默认的 appfolder（与 load_config 中的逻辑一致）
         folder_selected = os.path.realpath(os.path.join(os.path.dirname(sys.executable), "appfolder")).replace("\\", "/")
         print(f"工作目录 '{folder_selected}'")
-        os.makedirs(folder_selected)
+        os.makedirs(folder_selected, exist_ok=True)
 
     # 获取当前目录下所有有效的 .lnk 和 .url 文件
     try:
         os.chdir(folder_selected)  # 设置为用户选择的目录
     except Exception as e:
         print(f"无法切换到工作目录 '{folder_selected}'：{e}")
-        return
+        return False
     lnk_files = get_lnk_files()
     url_files = get_url_files()
     
@@ -888,12 +909,10 @@ def initialize():
     target_paths += [url[1] for url in url_files]  # 添加 .url 文件的目标路径
     lnkandurl_files = lnk_files + [url[0] for url in url_files]
 
-    # 确保目标文件夹存在
-    output_folder = f"{APP_INSTALL_PATH}\\config\\covers"  # 更改为适当的文件夹
-
-    # 加载现有的 apps.json 文件
-    apps_json_path = f"{APP_INSTALL_PATH}\\config\\apps.json"  # 修改为你的 apps.json 文件路径
+    output_folder = get_covers_dir()
+    apps_json_path = get_sunshine_apps_json_path()
     print(f"该应用会使用《{output_folder}》文件夹来存放输出的图像\n修改以下文件《{apps_json_path}》来添加sunshine应用程序")
+    return True
 
 SGDB_API_BASE_URL = "https://www.steamgriddb.com/api/v2"
 DEFAULT_SGDB_API_KEY = "1b378d4482f7088146d2f7e320139b74"
@@ -1483,12 +1502,13 @@ def runtomain():
     """
     global folder_selected, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
 
-    initialize()
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    if not initialize():
+        notify_run_error(f"无法切换到工作目录，请检查设置中的工作路径是否有效。\n\n路径: {folder_selected or '(未设置)'}")
+        return
 
+    # Sunshine covers 目录在确认添加时由提权进程创建，run 阶段无需预创建
     apps_json = load_apps_json(apps_json_path)
-    
+
     # 获取 main window 实例
     app = QtWidgets.QApplication.instance()
     if app is None:
