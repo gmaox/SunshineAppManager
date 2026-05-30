@@ -1656,6 +1656,10 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
         image_index = entry["image_index"]
         app_entry = generate_app_entry(shortcut_file, image_index)
         if app_entry:
+            display_name = (entry.get("app_name") or "").strip()
+            if display_name:
+                app_entry["name"] = display_name
+
             custom_image_path = entry.get("image-path")
             if custom_image_path:
                 app_entry["image-path"] = format_image_path_for_apps_json(custom_image_path)
