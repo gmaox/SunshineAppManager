@@ -501,7 +501,7 @@ class MainWindow(QMainWindow):
             basic_def.load_config()
         except Exception:
             pass
-        self.setWindowTitle("Sunshine App Manager v260529")
+        self.setWindowTitle("Sunshine App Manager v1.1")
         self.resize(900, 480)
 
         tab_names = [

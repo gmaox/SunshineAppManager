@@ -87,7 +87,20 @@ class AddGameWindow(QWidget):
         left_desc4.setFont(QFont("Segoe UI", 12))
         left_desc4.setWordWrap(True)
         left_layout.addWidget(left_desc4)        
-        left_desc5 = QLabel("（也可以将游戏启动文件拖入此处添加，一次可拖入多个）")
+        import os
+
+        drag_drop_text = "（也可以将游戏启动文件拖入此处添加，一次可拖入多个）"
+        # 检查是否为管理员权限
+        try:
+            is_admin = (os.getuid() == 0)
+        except AttributeError:
+            # Windows 环境下判断管理员权限
+            import ctypes
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+        if is_admin:
+            drag_drop_text += "\n（工具运行在管理员权限下，拖拽可能无法正常工作）"
+
+        left_desc5 = QLabel(drag_drop_text)
         left_desc5.setFont(QFont("Segoe UI", 10))
         left_desc5.setWordWrap(True)
         left_layout.addWidget(left_desc5)
