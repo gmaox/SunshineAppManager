@@ -29,6 +29,7 @@ pseudo_sorting_enabled = False  # 新增伪排序适应选项，默认关闭
 auto_delete_orphaned_entries = False  # 自动删除孤立条目（不再询问），默认关闭
 restart_sunshine_after_add = False  # 添加后重启sunshine，默认关闭
 theme = "深色"  # 主题设置，默认为深色
+image_path_use_relative = False  # apps.json 中 image-path 使用相对路径（基地版兼容），默认关闭即写绝对路径
 
 def get_app_install_path():
     app_name = "sunshine"
@@ -53,6 +54,39 @@ def get_app_install_path():
     print(f"未检测到安装目录！")
     return os.path.dirname(sys.executable)
 APP_INSTALL_PATH=get_app_install_path()
+
+
+def get_covers_dir():
+    return os.path.join(APP_INSTALL_PATH, "config", "covers")
+
+
+def cover_filename_from_image_path(image_path):
+    if not image_path:
+        return ""
+    return os.path.basename(str(image_path).replace("/", os.sep))
+
+
+def format_image_path_for_apps_json(cover_filename):
+    """将封面文件名格式化为写入 apps.json 的 image-path 值。"""
+    if not cover_filename:
+        return cover_filename
+    name = cover_filename_from_image_path(cover_filename)
+    if image_path_use_relative:
+        return name
+    path = os.path.normpath(os.path.join(get_covers_dir(), name))
+    # 统一为 Windows 反斜杠；json.dump 写入时会转义为 C:\\...\\file.png
+    return path.replace("/", "\\")
+
+
+def resolve_cover_file_path(image_path):
+    """根据 apps.json 中的 image-path 解析封面文件的完整路径。"""
+    if not image_path:
+        return ""
+    path = str(image_path).replace("/", os.sep)
+    if os.path.isabs(path):
+        return os.path.normpath(path)
+    return os.path.join(get_covers_dir(), cover_filename_from_image_path(path))
+
 
 def load_apps_json(json_path):
     # 加载已有的 apps.json
@@ -95,7 +129,7 @@ def save_apps_json(apps_json, file_path, extra_covers=None):
         if cover_bytes and isinstance(cover_bytes, bytes):
             image_path = entry.get('image-path')
             if image_path:
-                cover_tuples.append((image_path, cover_bytes))
+                cover_tuples.append((cover_filename_from_image_path(image_path), cover_bytes))
             del entry['cover_bytes']
 
     run_elevated_save(
@@ -114,7 +148,7 @@ def save_apps_json(apps_json, file_path, extra_covers=None):
             print(f"清空 temp 目录失败: {e}")
 def load_config():
     """加载配置文件并同步 `folder_selected` 变量"""
-    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme
+    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme, image_path_use_relative
     # 优先使用 UTF-8 打开配置文件以避免系统默认编码（如 GBK）导致的 UnicodeDecodeError。
     # 如果文件不存在则跳过，后续会调用 save_config() 创建默认文件。
     if os.path.exists(config_file_path):
@@ -149,6 +183,7 @@ def load_config():
     restart_sunshine_after_add = config.getboolean('Settings', 'restart_sunshine_after_add', fallback=False)
     # 新增 theme
     theme = config.get('Settings', 'theme', fallback='深色')
+    image_path_use_relative = config.getboolean('Settings', 'image_path_use_relative', fallback=False)
     if os.path.exists(config_file_path)==False:
         save_config()  #没有配置文件保存下
     # 检查 folder 是否有效
@@ -167,7 +202,7 @@ def load_config():
 def save_config():
     """保存选择的目录到配置文件"""
     try:
-        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme  # 添加全局变量声明
+        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme, image_path_use_relative  # 添加全局变量声明
         # 优先使用运行时的 `folder_selected`，保持一致性
         if folder_selected:
             folder = folder_selected
@@ -190,7 +225,8 @@ def save_config():
             # 新增 restart_sunshine_after_add
             'restart_sunshine_after_add': str(restart_sunshine_after_add),
             # 新增 theme
-            'theme': theme
+            'theme': theme,
+            'image_path_use_relative': str(image_path_use_relative),
         }
         
         # 保留 ignored_apps 如果存在
@@ -555,7 +591,7 @@ def generate_app_entry(lnk_file, index):
             "wait-all": "true",
             "exit-timeout": "5",
             "menu-cmd": "",
-            "image-path": f"output_image{index}.png",
+            "image-path": format_image_path_for_apps_json(f"output_image{index}.png"),
             "detached": [
                 f"\"{os.path.abspath(lnk_file)}\""
             ]
@@ -572,7 +608,7 @@ def generate_app_entry(lnk_file, index):
             "wait-all": "true",
             "exit-timeout": "5",
             "menu-cmd": "",
-            "image-path": f"output_image{index}.png",
+            "image-path": format_image_path_for_apps_json(f"output_image{index}.png"),
         }
     return entry
 
@@ -1534,7 +1570,7 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
         if app_entry:
             custom_image_path = entry.get("image-path")
             if custom_image_path:
-                app_entry["image-path"] = custom_image_path
+                app_entry["image-path"] = format_image_path_for_apps_json(custom_image_path)
 
             cover_bytes = entry.get("cover_bytes")
             if cover_bytes:

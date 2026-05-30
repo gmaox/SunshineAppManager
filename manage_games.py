@@ -5,7 +5,14 @@ import re, winreg
 import uuid
 from functools import partial
 from PyQt5 import QtWidgets, QtGui, QtCore
-from basic_def import APP_INSTALL_PATH, load_apps_json, save_apps_json, TEMP_COVERS_DIR
+from basic_def import (
+    APP_INSTALL_PATH,
+    load_apps_json,
+    save_apps_json,
+    TEMP_COVERS_DIR,
+    format_image_path_for_apps_json,
+    resolve_cover_file_path,
+)
 from sgdb_cover_window import choose_cover_with_sgdb_qt
 
 THUMB_SIZE = (80, 120)
@@ -94,7 +101,7 @@ class EditGameCard(QtWidgets.QFrame):
         # load cover
         cover_filename = self.entry.get('image-path')
         if cover_filename:
-            cover_full = os.path.join(APP_INSTALL_PATH, 'config', 'covers', cover_filename)
+            cover_full = resolve_cover_file_path(cover_filename)
             pix = get_thumb(cover_full)
             if pix:
                 self.cover_lbl.setPixmap(pix.scaled(80, 120, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
@@ -183,7 +190,7 @@ class EditGameCard(QtWidgets.QFrame):
             temp_path = os.path.join(TEMP_COVERS_DIR, newname)
             img.save(temp_path, 'JPEG', quality=95)
             
-            self.entry['image-path'] = newname
+            self.entry['image-path'] = format_image_path_for_apps_json(newname)
             save_apps_json(self.apps_json, self.apps_json_path)
             IMAGE_CACHE.clear()  # clear cache so new thumb used
             self.refresh_cb()
@@ -207,7 +214,7 @@ class EditGameCard(QtWidgets.QFrame):
         )
         
         if result_bytes:
-            self.entry['image-path'] = newname
+            self.entry['image-path'] = format_image_path_for_apps_json(newname)
             if sgdb_name:
                 self.entry['name'] = sgdb_name  # 更新名称如果选择了应用 SGDB 名称
             # 通过管理员进程保存封面与 apps.json

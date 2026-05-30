@@ -70,7 +70,8 @@ if __name__ == "__main__" and ("--choosecover" in sys.argv or "--delete" in sys.
             )
 
             if result_bytes:
-                entry["image-path"] = newname
+                from basic_def import format_image_path_for_apps_json
+                entry["image-path"] = format_image_path_for_apps_json(newname)
                 if sgdb_name:
                     entry["name"] = sgdb_name
                 save_apps_json(apps_json, apps_json_path, extra_covers=[(newname, result_bytes)])
@@ -500,7 +501,7 @@ class MainWindow(QMainWindow):
             basic_def.load_config()
         except Exception:
             pass
-        self.setWindowTitle("Sunshine App Manager v1.0")
+        self.setWindowTitle("Sunshine App Manager v260529")
         self.resize(900, 480)
 
         tab_names = [

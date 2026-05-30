@@ -75,6 +75,37 @@ class SettingsPage(QWidget):
         restart_sunshine_layout.addWidget(self.restart_sunshine_checkbox)
         restart_sunshine_layout.addStretch()
         settings_layout.addLayout(restart_sunshine_layout)
+
+        restart_sunshine_hint = QLabel(
+            "开启后每次添加应用都会尝试重启 sunshine 以应用更改，默认关闭是为了避免串流时添加应用突然断开的突兀体验。"
+            "tip：不打开此选项时需要您手动重启 sunshine 才能看到添加的应用"
+        )
+        restart_sunshine_hint.setFont(QFont("Segoe UI", 10))
+        restart_sunshine_hint.setWordWrap(True)
+        restart_sunshine_hint.setStyleSheet("color: #888888;")
+        settings_layout.addWidget(restart_sunshine_hint)
+
+        # 图像路径写入方式（默认绝对路径）
+        image_relative_layout = QHBoxLayout()
+        image_relative_label = QLabel("图像使用相对路径写入配置文件：")
+        image_relative_label.setFont(QFont("Segoe UI", 12))
+        self.image_relative_checkbox = QCheckBox()
+        self.image_relative_checkbox.setChecked(basic_def.image_path_use_relative)
+        self.image_relative_checkbox.setStyleSheet("")
+        image_relative_layout.addWidget(image_relative_label)
+        image_relative_layout.addWidget(self.image_relative_checkbox)
+        image_relative_layout.addStretch()
+        settings_layout.addLayout(image_relative_layout)
+
+        image_relative_hint = QLabel(
+            "该选项用于解决‘基地版sunshine’在自身应用管理中的图像显示问题，开启后会按照基地版规则写入apps.json。"
+            "非基地版或版本较低的基地版开启该选项会导致sunshine读不到应用图像！"
+        )
+        image_relative_hint.setFont(QFont("Segoe UI", 10))
+        image_relative_hint.setWordWrap(True)
+        image_relative_hint.setStyleSheet("color: #888888;")
+        settings_layout.addWidget(image_relative_hint)
+
         # 2. 开关示例（伪排序）
         auto_save_layout = QHBoxLayout()
         auto_save_label = QLabel("启用伪排序：")
@@ -182,6 +213,14 @@ class SettingsPage(QWidget):
         language_layout.addStretch()
         settings_layout.addLayout(language_layout)
         
+        language_hint = QLabel(
+            "currently the app only supports Chinese. 语言选项暂不可用，敬请期待后续更新！"
+        )
+        language_hint.setFont(QFont("Segoe UI", 10))
+        language_hint.setWordWrap(True)
+        language_hint.setStyleSheet("color: #888888;")
+        settings_layout.addWidget(language_hint)
+
         # 6. 下拉列表（主题）
         theme_layout = QHBoxLayout()
         theme_label = QLabel("主题：")
@@ -223,13 +262,29 @@ class SettingsPage(QWidget):
         # 关于文本
         about_text = QLabel(
             "该软件一个辅助工具，旨在简化将应用程序和游戏添加到 Sunshine 的过程。\n\n"
-
-            "项目开源地址：https://github.com/gmaox/QuickStreamAppAdd"
+            "项目开源地址：https://github.com/gmaox/SunshineAppManager"
         )
         about_text.setFont(QFont("Segoe UI", 10))
         about_text.setWordWrap(True)
         about_layout.addWidget(about_text)
-        
+
+        # 加一个按钮用于打开地址
+        open_github_btn = QPushButton("打开项目地址")
+        open_github_btn.setFont(QFont("Segoe UI", 10))
+        open_github_btn.setMinimumHeight(28)
+        open_github_btn.setStyleSheet("QPushButton { border-radius: 5px; padding: 5px 15px; }")
+        def open_github_link():
+            url = "https://github.com/gmaox/SunshineAppManager"
+            # 使用系统默认浏览器打开链接
+            if sys.platform.startswith('darwin'):
+                subprocess.call(('open', url))
+            elif os.name == 'nt':
+                os.startfile(url)
+            elif os.name == 'posix':
+                subprocess.call(('xdg-open', url))
+        open_github_btn.clicked.connect(open_github_link)
+        about_layout.addWidget(open_github_btn)
+      
         about_frame.setLayout(about_layout)
         # 边框与背景由全局主题控制，深色模式下使用深色背景与浅色文字
         about_frame.setStyleSheet("QFrame { border-radius: 5px; }")
@@ -264,6 +319,10 @@ class SettingsPage(QWidget):
             pass
         try:
             self.restart_sunshine_checkbox.stateChanged.connect(self.on_restart_sunshine_changed)
+        except Exception:
+            pass
+        try:
+            self.image_relative_checkbox.stateChanged.connect(self.on_image_relative_changed)
         except Exception:
             pass
         try:
@@ -303,6 +362,13 @@ class SettingsPage(QWidget):
             basic_def.save_config()
         except Exception as e:
             print(f"保存 restart_sunshine_after_add 失败: {e}")
+
+    def on_image_relative_changed(self, state):
+        try:
+            basic_def.image_path_use_relative = bool(state)
+            basic_def.save_config()
+        except Exception as e:
+            print(f"保存 image_path_use_relative 失败: {e}")
 
     def on_browse_work_path(self):
         try:
