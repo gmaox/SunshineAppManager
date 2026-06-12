@@ -28,7 +28,7 @@ SCANNER_TYPE_LABELS = {
     "steam": "Steam",
     "epic": "Epic",
     "rom": "ROM",
-    "custom": "自定义",
+    "custom": "Custom",
 }
 
 
@@ -185,11 +185,11 @@ def _scan_steam(scanner, work_folder, ignored_targets, progress_cb):
     source = str(scanner.get("source", "")).strip()
     steam_root = source or _detect_steam_root()
     if not steam_root or not os.path.isdir(steam_root):
-        return 0, 0, 1, "Steam 根路径未找到"
+        return 0, 0, 1, QtCore.QObject.tr("Steam 根路径未找到")
 
     steamapps_dirs = _steam_library_paths(steam_root)
     if not steamapps_dirs:
-        return 0, 0, 1, "Steam 库未找到"
+        return 0, 0, 1, QtCore.QObject.tr("Steam 库未找到")
 
     created = skipped = errors = 0
     scanner_name = scanner.get("name") or "Steam"
@@ -224,7 +224,7 @@ def _scan_steam(scanner, work_folder, ignored_targets, progress_cb):
                 errors += 1
                 progress_cb(f"[{scanner_name}] failed: {app_name} ({e})")
 
-    return created, skipped, errors, "Steam 扫描已完成"
+    return created, skipped, errors, QtCore.QObject.tr("Steam 扫描已完成")
 
 
 def _get_epic_manifest_dirs(source):
@@ -241,7 +241,7 @@ def _scan_epic(scanner, work_folder, ignored_targets, progress_cb):
     source = str(scanner.get("source", "")).strip()
     manifest_dirs = _get_epic_manifest_dirs(source)
     if not manifest_dirs:
-        return 0, 0, 1, "Epic 清单目录未找到"
+        return 0, 0, 1, QtCore.QObject.tr("Epic 清单目录未找到")
 
     created = skipped = errors = 0
     scanner_name = scanner.get("name") or "Epic"
@@ -290,7 +290,7 @@ def _scan_epic(scanner, work_folder, ignored_targets, progress_cb):
                 errors += 1
                 progress_cb(f"[{scanner_name}] failed: {app_name} ({e})")
 
-    return created, skipped, errors, "Epic 扫描已完成"
+    return created, skipped, errors, QtCore.QObject.tr("Epic 扫描已完成")
 
 
 def _iter_files(source, recursive):
@@ -353,7 +353,7 @@ def _scan_custom(scanner, work_folder, ignored_targets, progress_cb):
             errors += 1
             progress_cb(f"[{scanner_name}] failed: {app_name} ({e})")
 
-    return created, skipped, errors, "自定义扫描已完成"
+    return created, skipped, errors, QtCore.QObject.tr("自定义扫描已完成")
 
 
 def _parse_rom_extensions(value):
@@ -421,7 +421,7 @@ def _scan_rom(scanner, work_folder, ignored_targets, progress_cb):
             errors += 1
             progress_cb(f"[{scanner_name}] failed: {rom_name} ({e})")
 
-    return created, skipped, errors, "ROM 扫描已完成"
+    return created, skipped, errors, QtCore.QObject.tr("ROM 扫描已完成")
 
 
 def run_scanner(scanner, work_folder, ignored_targets, progress_cb=lambda _msg: None):
@@ -440,7 +440,7 @@ def run_scanner(scanner, work_folder, ignored_targets, progress_cb=lambda _msg: 
 class ScannerEditDialog(QtWidgets.QDialog):
     def __init__(self, scanner, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("编辑扫描器")
+        self.setWindowTitle(self.tr("编辑扫描器"))
         self.setModal(True)
         self.resize(520, 380)
         self.scanner = normalize_scanner(scanner)
@@ -449,44 +449,44 @@ class ScannerEditDialog(QtWidgets.QDialog):
 
         form = QtWidgets.QFormLayout()
         self.name_input = QtWidgets.QLineEdit(self.scanner.get("name", ""))
-        form.addRow("名称：", self.name_input)
+        form.addRow(self.tr("名称："), self.name_input)
 
-        self.type_lbl = QtWidgets.QLabel(SCANNER_TYPE_LABELS.get(self.scanner.get("type"), self.scanner.get("type", "")))
-        form.addRow("类型：", self.type_lbl)
+        self.type_lbl = QtWidgets.QLabel(self.tr(SCANNER_TYPE_LABELS.get(self.scanner.get("type"), self.scanner.get("type", ""))))
+        form.addRow(self.tr("类型："), self.type_lbl)
 
         self.source_input = QtWidgets.QLineEdit(self.scanner.get("source", ""))
         # if the user clears the name and then changes the source we can suggest a name again
         self.source_input.textChanged.connect(self._on_source_changed)
-        form.addRow("源路径：", self.source_input)
+        form.addRow(self.tr("源路径："), self.source_input)
 
-        self.enabled_chk = QtWidgets.QCheckBox("已启用")
+        self.enabled_chk = QtWidgets.QCheckBox(self.tr("已启用"))
         self.enabled_chk.setChecked(bool(self.scanner.get("enabled", True)))
         form.addRow("", self.enabled_chk)
 
-        self.recursive_chk = QtWidgets.QCheckBox("递归")
+        self.recursive_chk = QtWidgets.QCheckBox(self.tr("递归"))
         self.recursive_chk.setChecked(bool(self.scanner.get("recursive", True)))
         form.addRow("", self.recursive_chk)
 
-        self.hidden_chk = QtWidgets.QCheckBox("包含隐藏")
+        self.hidden_chk = QtWidgets.QCheckBox(self.tr("包含隐藏"))
         self.hidden_chk.setChecked(bool(self.scanner.get("include_hidden", False)))
         form.addRow("", self.hidden_chk)
 
         self.emulator_input = QtWidgets.QLineEdit(self.scanner.get("emulator_path", ""))
-        form.addRow("模拟器：", self.emulator_input)
+        form.addRow(self.tr("模拟器："), self.emulator_input)
 
         self.args_input = QtWidgets.QLineEdit(self.scanner.get("emulator_args", "{rom}"))
-        form.addRow("参数：", self.args_input)
+        form.addRow(self.tr("参数："), self.args_input)
 
         self.ext_input = QtWidgets.QLineEdit(self.scanner.get("rom_extensions", ""))
-        form.addRow("ROM 扩展名：", self.ext_input)
+        form.addRow(self.tr("ROM 扩展名："), self.ext_input)
 
         layout.addLayout(form)
         layout.addStretch()
 
         buttons = QtWidgets.QHBoxLayout()
         buttons.addStretch()
-        ok_btn = QtWidgets.QPushButton("保存")
-        cancel_btn = QtWidgets.QPushButton("取消")
+        ok_btn = QtWidgets.QPushButton(self.tr("保存"))
+        cancel_btn = QtWidgets.QPushButton(self.tr("取消"))
         ok_btn.clicked.connect(self.accept)
         cancel_btn.clicked.connect(self.reject)
         buttons.addWidget(ok_btn)
@@ -508,27 +508,27 @@ class ScannerEditDialog(QtWidgets.QDialog):
         source = self.source_input.text().strip()
         name = ""
         if scanner_type == "steam":
-            name = "Steam 库"
+            name = self.tr("Steam 库")
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = f"Steam 库 ({base})"
+                    name = self.tr("Steam 库 (%1)").arg(base)
         elif scanner_type == "epic":
-            name = "Epic 清单"
+            name = self.tr("Epic 清单")
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = f"Epic 清单 ({base})"
+                    name = self.tr("Epic 清单 (%1)").arg(base)
         elif scanner_type == "rom":
             if source:
                 name = os.path.basename(source.rstrip("\\/"))
             else:
-                name = "ROM 扫描器"
+                name = self.tr("ROM 扫描器")
         else:
             if source:
                 name = os.path.basename(source.rstrip("\\/"))
             else:
-                name = "自定义文件夹"
+                name = self.tr("自定义文件夹")
 
         if name and not self.name_input.text().strip():
             self.name_input.setText(name)
@@ -569,39 +569,39 @@ class ScannerManagePage(QtWidgets.QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
 
-        title = QtWidgets.QLabel("扫描器管理（beta功能，目前只推荐使用steam和epic扫描器）")
+        title = QtWidgets.QLabel(self.tr("扫描器管理（beta功能，目前只推荐使用steam和epic扫描器）"))
         title.setFont(QtGui.QFont("Segoe UI", 16, QtGui.QFont.Bold))
         root.addWidget(title)
 
         desc = QtWidgets.QLabel(
-            "管理扫描器预设，并与现有的忽略列表不並执行扫描。"
+            self.tr("管理扫描器预设，并与现有的忽略列表不並执行扫描。")
         )
         desc.setWordWrap(True)
         # 文字颜色由全局主题控制，深色模式下为浅色
         root.addWidget(desc)
 
         controls = QtWidgets.QHBoxLayout()
-        self.refresh_btn = QtWidgets.QPushButton("刷新")
+        self.refresh_btn = QtWidgets.QPushButton(self.tr("刷新"))
         self.refresh_btn.clicked.connect(self.reload_scanners)
         controls.addWidget(self.refresh_btn)
 
-        self.run_selected_btn = QtWidgets.QPushButton("运行已选中")
+        self.run_selected_btn = QtWidgets.QPushButton(self.tr("运行已选中"))
         self.run_selected_btn.clicked.connect(self.run_selected)
         controls.addWidget(self.run_selected_btn)
 
-        self.run_enabled_btn = QtWidgets.QPushButton("运行已启用")
+        self.run_enabled_btn = QtWidgets.QPushButton(self.tr("运行已启用"))
         self.run_enabled_btn.clicked.connect(self.run_enabled)
         controls.addWidget(self.run_enabled_btn)
 
-        self.toggle_btn = QtWidgets.QPushButton("切换启用")
+        self.toggle_btn = QtWidgets.QPushButton(self.tr("切换启用"))
         self.toggle_btn.clicked.connect(self.toggle_selected_enabled)
         controls.addWidget(self.toggle_btn)
 
-        self.edit_btn = QtWidgets.QPushButton("编辑")
+        self.edit_btn = QtWidgets.QPushButton(self.tr("编辑"))
         self.edit_btn.clicked.connect(self.edit_selected)
         controls.addWidget(self.edit_btn)
 
-        self.delete_btn = QtWidgets.QPushButton("删除")
+        self.delete_btn = QtWidgets.QPushButton(self.tr("删除"))
         self.delete_btn.clicked.connect(self.delete_selected)
         controls.addWidget(self.delete_btn)
 
@@ -611,7 +611,7 @@ class ScannerManagePage(QtWidgets.QWidget):
         self._run_buttons = [self.run_selected_btn, self.run_enabled_btn]
 
         self.table = QtWidgets.QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["名称", "类型", "源路径", "已启用", "上一次运行", "上次结果"])
+        self.table.setHorizontalHeaderLabels([self.tr("名称"), self.tr("类型"), self.tr("源路径"), self.tr("已启用"), self.tr("上一次运行"), self.tr("上次结果")])
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
@@ -658,7 +658,7 @@ class ScannerManagePage(QtWidgets.QWidget):
 
         for row, scanner in enumerate(self.scanners):
             self.table.insertRow(row)
-            t = SCANNER_TYPE_LABELS.get(scanner.get("type"), scanner.get("type", ""))
+            t = self.tr(SCANNER_TYPE_LABELS.get(scanner.get("type"), scanner.get("type", "")))
             enabled_text = "Yes" if scanner.get("enabled", True) else "No"
 
             values = [
@@ -674,12 +674,12 @@ class ScannerManagePage(QtWidgets.QWidget):
                 item.setData(QtCore.Qt.UserRole, scanner.get("id"))
                 self.table.setItem(row, col, item)
 
-        self.status_label.setText(f"已加载扫描器：{len(self.scanners)}")
+        self.status_label.setText(self.tr("已加载扫描器： %1").arg(str(len(self.scanners))))
 
     def toggle_selected_enabled(self):
         rows = self._selected_rows()
         if not rows:
-            self.status_label.setText("请选择至少一个扫描器。")
+            self.status_label.setText(self.tr("请选择至少一个扫描器。"))
             return
 
         for row in rows:
@@ -690,7 +690,7 @@ class ScannerManagePage(QtWidgets.QWidget):
     def edit_selected(self):
         rows = self._selected_rows()
         if len(rows) != 1:
-            self.status_label.setText("请恰好选择一个扫描器进行编辑。")
+            self.status_label.setText(self.tr("请恰好选择一个扫描器进行编辑。"))
             return
 
         row = rows[0]
@@ -702,18 +702,18 @@ class ScannerManagePage(QtWidgets.QWidget):
         self.scanners[row] = dlg.updated_scanner()
         save_scanners(self.scanners)
         self.reload_scanners()
-        self.status_label.setText(f"已更新扫描器：{self.scanners[row].get('name', '')}")
+        self.status_label.setText(self.tr("已更新扫描器： %1").arg(self.scanners[row].get('name', '')))
 
     def delete_selected(self):
         rows = self._selected_rows()
         if not rows:
-            self.status_label.setText("请选择至少一个扫描器进行删除。")
+            self.status_label.setText(self.tr("请选择至少一个扫描器进行删除。"))
             return
 
         reply = QtWidgets.QMessageBox.question(
             self,
-            "删除扫描器",
-            f"删除 {len(rows)} 个已选中的扫描器？",
+            self.tr("删除扫描器"),
+            self.tr("删除 %1 个已选中的扫描器？").arg(str(len(rows))),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No,
         )
@@ -727,14 +727,14 @@ class ScannerManagePage(QtWidgets.QWidget):
     def run_selected(self):
         scanners = self._selected_scanners()
         if not scanners:
-            self.status_label.setText("请选择至少一个扫描器进行运行。")
+            self.status_label.setText(self.tr("请选择至少一个扫描器进行运行。"))
             return
         self._start_scan(scanners)
 
     def run_enabled(self):
         scanners = [s for s in self.scanners if s.get("enabled", True)]
         if not scanners:
-            self.status_label.setText("没有已启用的扫描器可运行。")
+            self.status_label.setText(self.tr("没有已启用的扫描器可运行。"))
             return
         self._start_scan(scanners)
 
@@ -745,11 +745,11 @@ class ScannerManagePage(QtWidgets.QWidget):
 
     def _start_scan(self, scanners):
         if self._running:
-            self.status_label.setText("扫描已在运行中。")
+            self.status_label.setText(self.tr("扫描已在运行中。"))
             return
 
         self._set_running(True)
-        self.scan_log.emit(f"开始为 {len(scanners)} 个扫描器运行扫描...")  
+        self.scan_log.emit(self.tr("开始为 %1 个扫描器运行扫描...").arg(str(len(scanners))))
 
         def worker():
             summary = {
@@ -815,5 +815,10 @@ class ScannerManagePage(QtWidgets.QWidget):
         work_folder = summary.get("work_folder", "")
 
         self.status_label.setText(
-            f"扫描完成。扫描器={scanners}，已创建={created}，已跳过={skipped}，错误={errors}，输出={work_folder}"
+            self.tr("扫描完成。扫描器=%1，已创建=%2，已跳过=%3，错误=%4，输出=%5")
+            .arg(str(scanners))
+            .arg(str(created))
+            .arg(str(skipped))
+            .arg(str(errors))
+            .arg(work_folder)
         )

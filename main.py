@@ -101,7 +101,7 @@ if __name__ == "__main__" and ("--choosecover" in sys.argv or "--delete" in sys.
     sys.exit(0 if ok else 1)
 
 from PyQt5.QtGui import QFont, QColor, QTextCursor, QTextCharFormat
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QPropertyAnimation, QEasingCurve, QRect, QParallelAnimationGroup
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QPropertyAnimation, QEasingCurve, QRect, QParallelAnimationGroup, QTranslator, QLocale
 from io import StringIO
 
 from PyQt5.QtWidgets import (
@@ -226,7 +226,7 @@ class LogTab(QWidget):
         
         # 清空日志按钮
         button_layout = QHBoxLayout()
-        clear_btn = QPushButton("清空日志")
+        clear_btn = QPushButton(self.tr("清空日志"))
         clear_btn.clicked.connect(self.clear_log)
         button_layout.addStretch()
         button_layout.addWidget(clear_btn)
@@ -321,7 +321,7 @@ class LogTab(QWidget):
         
         # 截断过长的错误信息
         display_text = error_text[:100] + "..." if len(error_text) > 100 else error_text
-        notification.text_label.setText(f"❌ 错误：{display_text}")
+        notification.text_label.setText(f"❌ {self.tr('错误：')}{display_text}")
         
         # 计算右下角位置（相对于父窗口）
         rect = self.parent_window.rect()
@@ -449,7 +449,7 @@ class LogTab(QWidget):
         
         notification = self.parent_window.success_notification
         display_text = message_text[:100] + "..." if len(message_text) > 100 else message_text
-        notification.text_label.setText(f"✅ 成功：{display_text}")
+        notification.text_label.setText(f"✅ {self.tr('成功：')}{display_text}")
         rect = self.parent_window.rect()
         notification_width = notification.sizeHint().width() + 20
         notification_height = notification.sizeHint().height() + 20
@@ -501,12 +501,17 @@ class MainWindow(QMainWindow):
             basic_def.load_config()
         except Exception:
             pass
-        self.setWindowTitle("Sunshine App Manager v1.1")
+
+        # 初始化翻译器
+        self.translator = QTranslator()
+        self._apply_language(basic_def.language)
+
+        self.setWindowTitle(self.tr("Sunshine App Manager v1.1"))
         self.resize(900, 480)
 
         tab_names = [
-            '添加游戏', '浏览游戏', '日志', '设置',
-            '忽略列表', '添加扫描器', '扫描器管理'
+            self.tr('添加游戏'), self.tr('浏览游戏'), self.tr('日志'), self.tr('设置'),
+            self.tr('忽略列表'), self.tr('添加扫描器'), self.tr('扫描器管理')
         ]
 
         # 设置全局字体为微软雅黑
@@ -588,7 +593,7 @@ class MainWindow(QMainWindow):
                 v.addWidget(scanner_manage_widget)
             else:
                 # 其他标签页 - 显示占位符
-                label = QLabel(f"这是标签页{i+1}的内容")
+                label = QLabel(self.tr("这是标签页%1的内容").arg(str(i+1)))
                 label.setAlignment(Qt.AlignCenter)
                 label.setFont(QFont("Segoe UI", 14))
                 v.addStretch()
@@ -677,7 +682,7 @@ class MainWindow(QMainWindow):
             self.stacked.setCurrentIndex(0)
         except Exception as e:
             from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "错误", f"处理确认添加时出错: {e}")
+            QMessageBox.critical(self, self.tr("错误"), self.tr("处理确认添加时出错: %1").arg(str(e)))
     
     def _on_confirm_add_cancelled(self):
         """取消添加时的处理"""
@@ -734,6 +739,46 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app:
             app.setStyleSheet(stylesheet)
+
+    def _apply_language(self, lang_code):
+        """应用翻译：加载对应的 .qm 文件"""
+        import basic_def
+        app = QApplication.instance()
+        # 移除旧翻译器
+        if self.translator:
+            app.removeTranslator(self.translator)
+        # 翻译文件路径
+        i18n_dir = os.path.join(basic_def.SCRIPT_DIR, 'i18n')
+        qm_path = os.path.join(i18n_dir, f'app_{lang_code}.qm')
+        if os.path.exists(qm_path):
+            self.translator.load(qm_path)
+            app.installTranslator(self.translator)
+        else:
+            # 如果没有对应的翻译文件，不加载翻译（使用源码中的默认中文）
+            pass
+
+    def switch_language(self, lang_code):
+        """切换语言并重新显示界面"""
+        import basic_def
+        basic_def.language = lang_code
+        basic_def.save_config()
+        self._apply_language(lang_code)
+        # 需要重建界面以刷新所有 tr() 字符串
+        # 最简单的方式是重启应用
+        from PyQt5.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            self.tr("重启应用"),
+            self.tr("语言已更改，需要重启应用才能生效。是否立即重启？"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        if reply == QMessageBox.Yes:
+            app = QApplication.instance()
+            app.quit()
+            # 重新启动
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
 
 
 if __name__ == "__main__":

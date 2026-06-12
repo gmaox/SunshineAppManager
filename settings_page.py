@@ -47,13 +47,13 @@ class SettingsPage(QWidget):
         settings_layout.setSpacing(20)
         
         # 标题
-        settings_title = QLabel("设置")
+        settings_title = QLabel(self.tr("设置"))
         settings_title.setFont(QFont("Segoe UI", 18, QFont.Bold))
         settings_layout.addWidget(settings_title)
         
         # 1. 开关示例（完成后关闭）
         enable_notify_layout = QHBoxLayout()
-        enable_notify_label = QLabel("添加后关闭程序：")
+        enable_notify_label = QLabel(self.tr("添加后关闭程序："))
         enable_notify_label.setFont(QFont("Segoe UI", 12))
         self.enable_notify_checkbox = QCheckBox()
         self.enable_notify_checkbox.setChecked(basic_def.close_after_completion)
@@ -66,7 +66,7 @@ class SettingsPage(QWidget):
         
         # 4. 添加后重启sunshine（默认关闭）
         restart_sunshine_layout = QHBoxLayout()
-        restart_sunshine_label = QLabel("添加后重启sunshine：")
+        restart_sunshine_label = QLabel(self.tr("添加后重启sunshine："))
         restart_sunshine_label.setFont(QFont("Segoe UI", 12))
         self.restart_sunshine_checkbox = QCheckBox()
         self.restart_sunshine_checkbox.setChecked(basic_def.restart_sunshine_after_add)
@@ -77,8 +77,8 @@ class SettingsPage(QWidget):
         settings_layout.addLayout(restart_sunshine_layout)
 
         restart_sunshine_hint = QLabel(
-            "开启后每次添加应用都会尝试重启 sunshine 以应用更改，默认关闭是为了避免串流时添加应用突然断开的突兀体验。"
-            "tip：不打开此选项时需要您手动重启 sunshine 才能看到添加的应用"
+            self.tr("开启后每次添加应用都会尝试重启 sunshine 以应用更改，默认关闭是为了避免串流时添加应用突然断开的突兀体验。"
+            "tip：不打开此选项时需要您手动重启 sunshine 才能看到添加的应用")
         )
         restart_sunshine_hint.setFont(QFont("Segoe UI", 10))
         restart_sunshine_hint.setWordWrap(True)
@@ -87,7 +87,7 @@ class SettingsPage(QWidget):
 
         # 图像路径写入方式（默认绝对路径）
         image_relative_layout = QHBoxLayout()
-        image_relative_label = QLabel("图像使用相对路径写入配置文件：")
+        image_relative_label = QLabel(self.tr("图像使用相对路径写入配置文件："))
         image_relative_label.setFont(QFont("Segoe UI", 12))
         self.image_relative_checkbox = QCheckBox()
         self.image_relative_checkbox.setChecked(basic_def.image_path_use_relative)
@@ -98,8 +98,8 @@ class SettingsPage(QWidget):
         settings_layout.addLayout(image_relative_layout)
 
         image_relative_hint = QLabel(
-            "该选项用于解决‘基地版sunshine’在自身应用管理中的图像显示问题，开启后会按照基地版规则写入apps.json。"
-            "非基地版或版本较低的基地版开启该选项会导致sunshine读不到应用图像！"
+            self.tr("该选项用于解决'基地版sunshine'在自身应用管理中的图像显示问题，开启后会按照基地版规则写入apps.json。"
+            "非基地版或版本较低的基地版开启该选项会导致sunshine读不到应用图像！")
         )
         image_relative_hint.setFont(QFont("Segoe UI", 10))
         image_relative_hint.setWordWrap(True)
@@ -108,7 +108,7 @@ class SettingsPage(QWidget):
 
         # 2. 开关示例（伪排序）
         auto_save_layout = QHBoxLayout()
-        auto_save_label = QLabel("启用伪排序：")
+        auto_save_label = QLabel(self.tr("启用伪排序："))
         auto_save_label.setFont(QFont("Segoe UI", 12))
         self.auto_save_checkbox = QCheckBox()
         self.auto_save_checkbox.setChecked(basic_def.pseudo_sorting_enabled)
@@ -137,10 +137,10 @@ class SettingsPage(QWidget):
         # 3. 文件选择器（工作路径）
         work_path_layout = QHBoxLayout()
         work_path_layout.setSpacing(5)
-        work_path_label = QLabel("工作路径：")
+        work_path_label = QLabel(self.tr("工作路径："))
         work_path_label.setFont(QFont("Segoe UI", 12))
         self.work_path_input = QLineEdit()
-        self.work_path_input.setPlaceholderText("选择工作路径...")
+        self.work_path_input.setPlaceholderText(self.tr("选择工作路径..."))
         self.work_path_input.setReadOnly(True)
         self.work_path_input.setStyleSheet("QLineEdit { border: none; padding:6px; }")
         # 显示当前配置中的工作路径
@@ -149,7 +149,7 @@ class SettingsPage(QWidget):
                 self.work_path_input.setText(os.path.normpath(basic_def.folder))
         except Exception:
             pass
-        work_path_open_btn = QPushButton("浏览")
+        work_path_open_btn = QPushButton(self.tr("浏览"))
         work_path_open_btn.setFixedWidth(50)
         work_path_open_btn.setFixedHeight(34)
         work_path_open_btn.setStyleSheet(
@@ -158,7 +158,7 @@ class SettingsPage(QWidget):
         )
         work_path_open_btn.clicked.connect(self.on_open_work_path)
         self.work_path_open_btn = work_path_open_btn
-        work_path_btn = QPushButton("选择文件夹")
+        work_path_btn = QPushButton(self.tr("选择文件夹"))
         work_path_btn.setFixedWidth(100)
         work_path_btn.setFixedHeight(34)
         work_path_btn.setStyleSheet(
@@ -179,10 +179,10 @@ class SettingsPage(QWidget):
         
         # 4. 文件选择器（配置文件）
         config_path_layout = QHBoxLayout()
-        config_path_label = QLabel("配置文件：")
+        config_path_label = QLabel(self.tr("配置文件："))
         config_path_label.setFont(QFont("Segoe UI", 12))
         self.config_path_input = QLineEdit()
-        self.config_path_input.setPlaceholderText("选择配置文件...")
+        self.config_path_input.setPlaceholderText(self.tr("选择配置文件..."))
         self.config_path_input.setReadOnly(True)
         self.config_path_input.setStyleSheet("QLineEdit { border: none; padding:6px; }")
         # 显示当前 config.ini 路径
@@ -197,11 +197,19 @@ class SettingsPage(QWidget):
         
         # 5. 下拉列表（语言）
         language_layout = QHBoxLayout()
-        language_label = QLabel("语言：")
+        language_label = QLabel(self.tr("语言："))
         language_label.setFont(QFont("Segoe UI", 12))
-        language_combo = QComboBox()
-        language_combo.addItems(["中文", "English"])
-        language_combo.setCurrentIndex(0)
+        self.language_combo = QComboBox()
+        self.language_combo.addItem("中文", "zh_CN")
+        self.language_combo.addItem("English", "en_US")
+        # 根据当前配置设置语言
+        current_lang = basic_def.language
+        idx = self.language_combo.findData(current_lang)
+        if idx >= 0:
+            self.language_combo.setCurrentIndex(idx)
+        else:
+            self.language_combo.setCurrentIndex(0)
+        language_combo = self.language_combo
         language_combo.setMinimumHeight(34)
         language_combo.setFont(QFont("Segoe UI", 12))
         language_combo.setStyleSheet(
@@ -214,7 +222,7 @@ class SettingsPage(QWidget):
         settings_layout.addLayout(language_layout)
         
         language_hint = QLabel(
-            "currently the app only supports Chinese. 语言选项暂不可用，敬请期待后续更新！"
+            self.tr("更改语言后需要重启应用才能生效。")
         )
         language_hint.setFont(QFont("Segoe UI", 10))
         language_hint.setWordWrap(True)
@@ -223,7 +231,7 @@ class SettingsPage(QWidget):
 
         # 6. 下拉列表（主题）
         theme_layout = QHBoxLayout()
-        theme_label = QLabel("主题：")
+        theme_label = QLabel(self.tr("主题："))
         theme_label.setFont(QFont("Segoe UI", 12))
         theme_combo = QComboBox()
         theme_combo.addItems(["深色", "浅色", "经典"])
@@ -255,21 +263,21 @@ class SettingsPage(QWidget):
         about_layout.setSpacing(10)
         
         # 关于标题
-        about_title = QLabel("关于 Sunshine App Manager")
+        about_title = QLabel(self.tr("关于 Sunshine App Manager"))
         about_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
         about_layout.addWidget(about_title)
         
         # 关于文本
         about_text = QLabel(
-            "该软件一个辅助工具，旨在简化将应用程序和游戏添加到 Sunshine 的过程。\n\n"
-            "项目开源地址：https://github.com/gmaox/SunshineAppManager"
+            self.tr("该软件一个辅助工具，旨在简化将应用程序和游戏添加到 Sunshine 的过程。\n\n"
+            "项目开源地址：https://github.com/gmaox/SunshineAppManager")
         )
         about_text.setFont(QFont("Segoe UI", 10))
         about_text.setWordWrap(True)
         about_layout.addWidget(about_text)
 
         # 加一个按钮用于打开地址
-        open_github_btn = QPushButton("打开项目地址")
+        open_github_btn = QPushButton(self.tr("打开项目地址"))
         open_github_btn.setFont(QFont("Segoe UI", 10))
         open_github_btn.setMinimumHeight(28)
         open_github_btn.setStyleSheet("QPushButton { border-radius: 5px; padding: 5px 15px; }")
@@ -333,6 +341,10 @@ class SettingsPage(QWidget):
             self.theme_combo.currentTextChanged.connect(self.on_theme_changed)
         except Exception:
             pass
+        try:
+            self.language_combo.currentIndexChanged.connect(self.on_language_changed)
+        except Exception:
+            pass
 
     def on_close_after_changed(self, state):
         # state: 0 or 2
@@ -372,7 +384,7 @@ class SettingsPage(QWidget):
 
     def on_browse_work_path(self):
         try:
-            dirname = QFileDialog.getExistingDirectory(self, "选择工作路径", basic_def.folder or os.path.expanduser("~"))
+            dirname = QFileDialog.getExistingDirectory(self, self.tr("选择工作路径"), basic_def.folder or os.path.expanduser("~"))
             if dirname:
                 dirname = os.path.normpath(dirname).replace('\\', '/')
                 self.work_path_input.setText(dirname)
@@ -415,3 +427,13 @@ class SettingsPage(QWidget):
                 main_window.apply_theme(theme)
         except Exception as e:
             print(f"保存主题失败: {e}")
+
+    def on_language_changed(self, index):
+        try:
+            lang_code = self.language_combo.itemData(index)
+            if lang_code:
+                main_window = self.window()
+                if hasattr(main_window, 'switch_language'):
+                    main_window.switch_language(lang_code)
+        except Exception as e:
+            print(f"切换语言失败: {e}")

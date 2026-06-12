@@ -59,7 +59,7 @@ class EditGameCard(QtWidgets.QFrame):
         h = QtWidgets.QHBoxLayout(self)
         h.setContentsMargins(8, 8, 8, 8)
         # cover
-        self.cover_lbl = QtWidgets.QLabel('无封面')
+        self.cover_lbl = QtWidgets.QLabel(self.tr("无封面"))
         self.cover_lbl.setFixedSize(80, 120)
         # 封面占位背景与文字由全局主题控制（深色 #333 与 white 由主题统一）
         self.cover_lbl.setStyleSheet('')
@@ -70,7 +70,7 @@ class EditGameCard(QtWidgets.QFrame):
 
         # info
         v = QtWidgets.QVBoxLayout()
-        name = self.entry.get('name', '未知游戏')
+        name = self.entry.get('name', self.tr("未知游戏"))
         name = re.sub(r'^\d{2} ', '', name)
         self.name_lbl = QtWidgets.QLabel(name)
         font = self.name_lbl.font()
@@ -88,9 +88,9 @@ class EditGameCard(QtWidgets.QFrame):
 
         btns = QtWidgets.QHBoxLayout()
         btns.addStretch()
-        self.edit_btn = QtWidgets.QPushButton('编辑')
-        self.del_btn = QtWidgets.QPushButton('删除')
-        self.cover_btn = QtWidgets.QPushButton('更换封面')
+        self.edit_btn = QtWidgets.QPushButton(self.tr("编辑"))
+        self.del_btn = QtWidgets.QPushButton(self.tr("删除"))
+        self.cover_btn = QtWidgets.QPushButton(self.tr("更换封面"))
         for btn in (self.del_btn, self.edit_btn, self.cover_btn):
             btn.setFixedHeight(26)
             btns.addWidget(btn)
@@ -116,8 +116,8 @@ class EditGameCard(QtWidgets.QFrame):
         self._change_cover_with_sgdb()
 
     def on_delete(self):
-        name = self.entry.get('name', '未知游戏')
-        if QtWidgets.QMessageBox.question(self, '确认删除', f"确定要删除游戏 '{name}' 吗？") != QtWidgets.QMessageBox.Yes:
+        name = self.entry.get('name', self.tr("未知游戏"))
+        if QtWidgets.QMessageBox.question(self, self.tr("确认删除"), self.tr("确定要删除游戏 '%1' 吗？").arg(name)) != QtWidgets.QMessageBox.Yes:
             return
         for i, e in enumerate(self.apps_json.get('apps', [])):
             if e is self.entry or e == self.entry:
@@ -133,18 +133,18 @@ class EditGameCard(QtWidgets.QFrame):
         else:
             # 如果没有manage_window引用，降级使用弹出对话框
             dlg = QtWidgets.QDialog(self)
-            dlg.setWindowTitle('编辑游戏信息')
+            dlg.setWindowTitle(self.tr("编辑游戏信息"))
             dlg.setModal(True)
             layout = QtWidgets.QVBoxLayout(dlg)
-            layout.addWidget(QtWidgets.QLabel('游戏名称:'))
+            layout.addWidget(QtWidgets.QLabel(self.tr("游戏名称:")))
             name_e = QtWidgets.QLineEdit(self.entry.get('name', ''))
             layout.addWidget(name_e)
-            layout.addWidget(QtWidgets.QLabel('命令行/路径:'))
+            layout.addWidget(QtWidgets.QLabel(self.tr("命令行/路径:")))
             cmd_e = QtWidgets.QLineEdit(self.entry.get('cmd', ''))
             layout.addWidget(cmd_e)
             btns = QtWidgets.QHBoxLayout()
-            save_btn = QtWidgets.QPushButton('保存')
-            cancel_btn = QtWidgets.QPushButton('取消')
+            save_btn = QtWidgets.QPushButton(self.tr("保存"))
+            cancel_btn = QtWidgets.QPushButton(self.tr("取消"))
             btns.addWidget(save_btn)
             btns.addWidget(cancel_btn)
             layout.addLayout(btns)
@@ -175,7 +175,7 @@ class EditGameCard(QtWidgets.QFrame):
         self.refresh_cb()
 
     def on_change_cover(self):
-        fp, _ = QtWidgets.QFileDialog.getOpenFileName(self, '选择封面图片', '', '图片 (*.jpg *.jpeg *.png *.bmp)')
+        fp, _ = QtWidgets.QFileDialog.getOpenFileName(self, self.tr("选择封面图片"), '', self.tr("图片 (*.jpg *.jpeg *.png *.bmp)"))
         if not fp:
             return
         try:
@@ -195,11 +195,11 @@ class EditGameCard(QtWidgets.QFrame):
             IMAGE_CACHE.clear()  # clear cache so new thumb used
             self.refresh_cb()
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, '错误', f'更换封面失败: {e}')
+            QtWidgets.QMessageBox.critical(self, self.tr("错误"), self.tr("更换封面失败: %1").arg(str(e)))
 
     def _change_cover_with_sgdb(self):
         """使用 SGDB 选择封面"""
-        app_name = self.entry.get('name', '未知游戏')
+        app_name = self.entry.get('name', self.tr("未知游戏"))
         exe_path = self.entry.get('cmd', '')
         
         # 确定输出路径
@@ -226,7 +226,7 @@ class EditGameCard(QtWidgets.QFrame):
 class ManageWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('管理现有游戏')
+        self.setWindowTitle(self.tr("管理现有游戏"))
         self.resize(799, 600)
         self.apps_json_path = os.path.join(APP_INSTALL_PATH, 'config', 'apps.json')
         if not os.path.exists(self.apps_json_path):
@@ -243,11 +243,11 @@ class ManageWindow(QtWidgets.QWidget):
         # search row
         h = QtWidgets.QHBoxLayout()
         self.search_edit = QtWidgets.QLineEdit()
-        self.search_edit.setPlaceholderText('搜索游戏...')
+        self.search_edit.setPlaceholderText(self.tr("搜索游戏..."))
         self.search_edit.textChanged.connect(self._debounce_refresh)
         self.search_edit.setFixedHeight(30)
         h.addWidget(self.search_edit)
-        self.search_btn = QtWidgets.QPushButton('搜索')
+        self.search_btn = QtWidgets.QPushButton(self.tr("搜索"))
         self.search_btn.clicked.connect(self._debounce_refresh)
         # 按钮尺寸调整：固定高度，宽度合理
         self.search_btn.setFixedHeight(30)
@@ -282,7 +282,7 @@ class ManageWindow(QtWidgets.QWidget):
         
         # 底部按钮
         bottom = QtWidgets.QHBoxLayout()
-        refresh_btn = QtWidgets.QPushButton('刷新游戏列表')
+        refresh_btn = QtWidgets.QPushButton(self.tr("刷新游戏列表"))
         refresh_btn.clicked.connect(self.reload_apps)
         # 按钮尺寸调整：固定高度，宽度合理
         refresh_btn.setFixedHeight(40)
@@ -300,7 +300,7 @@ class ManageWindow(QtWidgets.QWidget):
         
         main_layout.addLayout(h_split)
 
-        self.path_lbl.setText(f'当前加载路径: {self.apps_json_path}')
+        self.path_lbl.setText(self.tr("当前加载路径: %1").arg(self.apps_json_path))
         # 安装容器的事件过滤器以响应子控件尺寸变化
         self.container.installEventFilter(self)
         self._do_refresh()
@@ -314,18 +314,18 @@ class ManageWindow(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(panel)
         layout.setContentsMargins(15, 15, 15, 15)
         
-        title = QtWidgets.QLabel('编辑游戏信息')
+        title = QtWidgets.QLabel(self.tr("编辑游戏信息"))
         font = title.font()
         font.setBold(True)
         font.setPointSize(font.pointSize() + 2)
         title.setFont(font)
         layout.addWidget(title)
         
-        layout.addWidget(QtWidgets.QLabel('游戏名称:'))
+        layout.addWidget(QtWidgets.QLabel(self.tr("游戏名称:")))
         self.edit_name = QtWidgets.QLineEdit()
         layout.addWidget(self.edit_name)
         
-        layout.addWidget(QtWidgets.QLabel('命令行/路径:'))
+        layout.addWidget(QtWidgets.QLabel(self.tr("命令行/路径:")))
         self.edit_cmd = QtWidgets.QLineEdit()
         self.edit_cmd.setMinimumHeight(60)
         layout.addWidget(self.edit_cmd)
@@ -333,10 +333,10 @@ class ManageWindow(QtWidgets.QWidget):
         layout.addStretch()
         
         btns = QtWidgets.QHBoxLayout()
-        save_btn = QtWidgets.QPushButton('保存')
+        save_btn = QtWidgets.QPushButton(self.tr("保存"))
         save_btn.setFixedHeight(26)
         save_btn.setFixedWidth(80)
-        cancel_btn = QtWidgets.QPushButton('取消')
+        cancel_btn = QtWidgets.QPushButton(self.tr("取消"))
         cancel_btn.setFixedHeight(26)
         cancel_btn.setFixedWidth(80)
         save_btn.clicked.connect(self._save_edit)
@@ -395,7 +395,7 @@ class ManageWindow(QtWidgets.QWidget):
         term = self.search_edit.text().strip().lower()
         apps = [a for a in self.apps_json.get('apps', []) if (not term or term in a.get('name','').lower())]
         if not apps:
-            label = QtWidgets.QLabel('没有找到游戏条目')
+            label = QtWidgets.QLabel(self.tr("没有找到游戏条目"))
             self.grid.addWidget(label, 0, 0)
             return
         width = max(300, self.width())

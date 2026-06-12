@@ -25,18 +25,18 @@ class AddGameWindow(QWidget):
             runtomain()
         except PermissionError as e:
             notify_run_error(
-                f"无法访问 Sunshine 配置目录，可能需要管理员权限。\n\n"
-                f"目标路径: {get_covers_dir()}\n\n"
-                f"详情: {e}"
+                self.tr("无法访问 Sunshine 配置目录，可能需要管理员权限。\n\n"
+                        "目标路径: %1\n\n"
+                        "详情: %2").arg(get_covers_dir()).arg(str(e))
             )
         except OSError as e:
             notify_run_error(
-                f"访问 Sunshine 配置路径时出错。\n\n"
-                f"目标路径: {get_covers_dir()}\n\n"
-                f"详情: {e}"
+                self.tr("访问 Sunshine 配置路径时出错。\n\n"
+                        "目标路径: %1\n\n"
+                        "详情: %2").arg(get_covers_dir()).arg(str(e))
             )
         except Exception as e:
-            notify_run_error(f"运行失败: {e}")
+            notify_run_error(self.tr("运行失败: %1").arg(str(e)))
     
     def init_ui(self):
         """初始化UI界面"""
@@ -51,45 +51,45 @@ class AddGameWindow(QWidget):
         left_layout.setSpacing(15)
         
         # 标题
-        left_title = QLabel("开始添加")
+        left_title = QLabel(self.tr("开始添加"))
         left_title.setFont(QFont("Segoe UI", 16, QFont.Bold))
         left_layout.addWidget(left_title)
         
         # 说明文本 - 第一段
-        left_desc1 = QLabel("将您的添加列表（工作文件夹）的游戏添加至Sunshine")
+        left_desc1 = QLabel(self.tr("将您的添加列表（工作文件夹）的游戏添加至Sunshine"))
         left_desc1.setFont(QFont("Segoe UI", 10))
         left_desc1.setWordWrap(True)
         left_layout.addWidget(left_desc1)
-        left_desc11 = QLabel("以下是简要的操作步骤：")
+        left_desc11 = QLabel(self.tr("以下是简要的操作步骤："))
         left_desc11.setFont(QFont("Segoe UI", 12))
         left_desc11.setWordWrap(True)
         left_layout.addWidget(left_desc11)
         
         # 说明文本 - 第二段
         left_desc2 = QLabel(
-            "1. 点击\"run\"按钮来解析您的游戏。\n"
-            "2. 等到所有图片都下载完成为止\n"
-            "3. 点击\"保存至\"，然后等待出现\"添加/删除条目完成\""
-            "的提示信息。"
+            self.tr("1. 点击\"run\"按钮来解析您的游戏。\n"
+                    "2. 等到所有图片都下载完成为止\n"
+                    "3. 点击\"保存至\"，然后等待出现\"添加/删除条目完成\""
+                    "的提示信息。")
         )
         left_desc2.setFont(QFont("Segoe UI", 12))
         left_desc2.setWordWrap(True)
         left_layout.addWidget(left_desc2)
         
         # 说明文本 - 第三段
-        left_desc3 = QLabel("如果游戏的美术设计有误，请点击\"修复\"并选择正确的游戏，然后点击\"保存\"并关闭。")
+        left_desc3 = QLabel(self.tr("如果游戏的美术设计有误，请点击\"修复\"并选择正确的游戏，然后点击\"保存\"并关闭。"))
         left_desc3.setFont(QFont("Segoe UI", 12))
         left_desc3.setWordWrap(True)
         left_layout.addWidget(left_desc3)
         
         # 说明文本 - 第四段
-        left_desc4 = QLabel("如果您不想添加所有游戏，请点击\"忽略应用\"，然后选择您不想添加的那些应用，最后点击\"保存忽略项\"即可。")
+        left_desc4 = QLabel(self.tr("如果您不想添加所有游戏，请点击\"忽略应用\"，然后选择您不想添加的那些应用，最后点击\"保存忽略项\"即可。"))
         left_desc4.setFont(QFont("Segoe UI", 12))
         left_desc4.setWordWrap(True)
         left_layout.addWidget(left_desc4)        
         import os
 
-        drag_drop_text = "（也可以将游戏启动文件拖入此处添加，一次可拖入多个）"
+        drag_drop_text = self.tr("（也可以将游戏启动文件拖入此处添加，一次可拖入多个）")
         # 检查是否为管理员权限
         try:
             is_admin = (os.getuid() == 0)
@@ -98,7 +98,7 @@ class AddGameWindow(QWidget):
             import ctypes
             is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
         if is_admin:
-            drag_drop_text += "\n（工具运行在管理员权限下，拖拽可能无法正常工作）"
+            drag_drop_text += self.tr("\n（工具运行在管理员权限下，拖拽可能无法正常工作）")
 
         left_desc5 = QLabel(drag_drop_text)
         left_desc5.setFont(QFont("Segoe UI", 10))
@@ -142,10 +142,10 @@ class AddGameWindow(QWidget):
         right_layout.setSpacing(15)
         
         # 标题 + 右上角悬浮按钮
-        right_title = QLabel("运作扫描器")
+        right_title = QLabel(self.tr("运作扫描器"))
         right_title.setFont(QFont("Segoe UI", 16, QFont.Bold))
 
-        add_running_btn = QPushButton("添加运行中游戏")
+        add_running_btn = QPushButton(self.tr("添加运行中游戏"))
         add_running_btn.setFont(QFont("Segoe UI", 10, QFont.Bold))
         add_running_btn.setFixedHeight(34)
         add_running_btn.setStyleSheet(
@@ -173,23 +173,23 @@ class AddGameWindow(QWidget):
         right_layout.addLayout(title_layout)
         
         # 说明文本 - 第一段
-        right_desc1 = QLabel("扫描器能便捷的添加游戏至添加列表（工作文件夹）")
+        right_desc1 = QLabel(self.tr("扫描器能便捷的添加游戏至添加列表（工作文件夹）"))
         right_desc1.setFont(QFont("Segoe UI", 10))
         right_desc1.setWordWrap(True)
         right_layout.addWidget(right_desc1)
-        right_desc11 = QLabel("扫描器分为以下两类：")
+        right_desc11 = QLabel(self.tr("扫描器分为以下两类："))
         right_desc11.setFont(QFont("Segoe UI", 12))
         right_desc11.setWordWrap(True)
         right_layout.addWidget(right_desc11)
         
         # 说明文本 - 第二段
-        right_desc2 = QLabel("1. 平台扫描器：用于扫描steam，epic内游戏\n2. rom扫描器：用于添加模拟器内游戏")
+        right_desc2 = QLabel(self.tr("1. 平台扫描器：用于扫描steam，epic内游戏\n2. rom扫描器：用于添加模拟器内游戏"))
         right_desc2.setFont(QFont("Segoe UI", 12))
         right_desc2.setWordWrap(True)
         right_layout.addWidget(right_desc2)
         
         # 说明文本 - 第三段
-        right_desc3 = QLabel("扫描器不会扫描忽略列表的游戏。\n你可以在右侧某单编辑运作的扫描器\n启用的扫描器：（双击可切换状态）")
+        right_desc3 = QLabel(self.tr("扫描器不会扫描忽略列表的游戏。\n你可以在右侧某单编辑运作的扫描器\n启用的扫描器：（双击可切换状态）"))
         right_desc3.setFont(QFont("Segoe UI", 12))
         right_desc3.setWordWrap(True)
         right_layout.addWidget(right_desc3)
@@ -252,7 +252,7 @@ class AddGameWindow(QWidget):
         self.scanner_list.clear()
         scanners = load_scanners()
         if not scanners:
-            item = QListWidgetItem("（无扫描器）")
+            item = QListWidgetItem(self.tr("（无扫描器）"))
             item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
             self.scanner_list.addItem(item)
             return
@@ -281,7 +281,7 @@ class AddGameWindow(QWidget):
     def run_enabled_scanners(self):
         scanners = [s for s in load_scanners() if s.get("enabled", True)]
         if not scanners:
-            QMessageBox.information(self, "扫描", "没有已启用的扫描器可运行。")
+            QMessageBox.information(self, self.tr("扫描"), self.tr("没有已启用的扫描器可运行。"))
             return
 
         ignored = _load_ignored_targets()
@@ -296,9 +296,14 @@ class AddGameWindow(QWidget):
         # 用非阻塞通知显示结果
         from PyQt5.QtWidgets import QApplication
         msg = (
-            f"已运行 {len(scanners)} 个扫描器\n"
-            f"创建 {total_created}, 跳过 {total_skipped}, 错误 {total_errors}\n"
-            f"输出文件夹: {work_folder}"
+            self.tr("已运行 %1 个扫描器\n"
+                    "创建 %2, 跳过 %3, 错误 %4\n"
+                    "输出文件夹: %5")
+            .arg(str(len(scanners)))
+            .arg(str(total_created))
+            .arg(str(total_skipped))
+            .arg(str(total_errors))
+            .arg(work_folder)
         )
         print(msg)  # 同时打印到日志
         app = QApplication.instance()
@@ -353,7 +358,7 @@ class AddGameWindow(QWidget):
         ]
 
         if not paths:
-            QMessageBox.warning(self, '提示', '仅支持拖入 .exe 或 .lnk 文件。')
+            QMessageBox.warning(self, self.tr('提示'), self.tr('仅支持拖入 .exe 或 .lnk 文件。'))
             event.ignore()
             return
 
@@ -362,12 +367,12 @@ class AddGameWindow(QWidget):
         skipped_count = len(result.get('skipped', []))
         error_count = len(result.get('errors', []))
 
-        lines = [f"已在工作文件夹创建 {created_count} 个快捷方式。"]
+        lines = [self.tr("已在工作文件夹创建 %1 个快捷方式。").arg(str(created_count))]
         if skipped_count:
-            lines.append(f"已跳过 {skipped_count} 个不支持文件。")
+            lines.append(self.tr("已跳过 %1 个不支持文件。").arg(str(skipped_count)))
         if error_count:
-            lines.append(f"有 {error_count} 个文件处理失败，请查看日志页。")
-        lines.append(f"工作文件夹: {result.get('work_folder', '')}")
+            lines.append(self.tr("有 %1 个文件处理失败，请查看日志页。").arg(str(error_count)))
+        lines.append(self.tr("工作文件夹: %1").arg(result.get('work_folder', '')))
 
         # 用成功通知代替阻塞对话框
         from PyQt5.QtWidgets import QApplication
@@ -385,7 +390,7 @@ class AddGameWindow(QWidget):
         """快速添加运行中游戏"""
         scale = 1.0
         proc_dialog = QDialog(self)
-        proc_dialog.setWindowTitle("选择运行中游戏进程")
+        proc_dialog.setWindowTitle(self.tr("选择运行中游戏进程"))
         proc_dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         proc_dialog.setStyleSheet(f"""
             QDialog {{
@@ -405,7 +410,7 @@ class AddGameWindow(QWidget):
         )
 
         label = QLabel(
-            "选择一个运行中游戏进程，加入到游戏列表。"
+            self.tr("选择一个运行中游戏进程，加入到游戏列表。")
         )
         label.setStyleSheet("color: white; font-size: 16px;")
         label.setWordWrap(True)
@@ -438,12 +443,12 @@ class AddGameWindow(QWidget):
                 continue
 
         if not proc_list:
-            label2 = QLabel("没有检测到可用进程")
+            label2 = QLabel(self.tr("没有检测到可用进程"))
             label2.setStyleSheet("color: white; font-size: 16px;")
             vbox.addWidget(label2)
         else:
             for proc in proc_list:
-                proc_name = proc.info.get('name', '未知')
+                proc_name = proc.info.get('name', self.tr('未知'))
                 proc_exe = proc.info.get('exe', '')
 
                 hbox = QHBoxLayout()
@@ -486,8 +491,8 @@ class AddGameWindow(QWidget):
                 def open_file_dialog(proc_exe=proc_exe):
                     start_dir = os.path.dirname(proc_exe) if proc_exe and os.path.exists(proc_exe) else ""
                     file_dialog = QFileDialog(proc_dialog)
-                    file_dialog.setWindowTitle("手动选择要添加的游戏文件")
-                    file_dialog.setNameFilter("可执行文件 (*.exe *.lnk)")
+                    file_dialog.setWindowTitle(self.tr("手动选择要添加的游戏文件"))
+                    file_dialog.setNameFilter(self.tr("可执行文件 (*.exe *.lnk)"))
                     file_dialog.setFileMode(QFileDialog.ExistingFile)
                     if start_dir:
                         file_dialog.setDirectory(start_dir)
@@ -522,11 +527,11 @@ class AddGameWindow(QWidget):
         skipped = len(result.get('skipped', []))
         errors = len(result.get('errors', []))
 
-        lines = [f"已在工作文件夹创建 {created} 个快捷方式。"]
+        lines = [self.tr("已在工作文件夹创建 %1 个快捷方式。").arg(str(created))]
         if skipped:
-            lines.append(f"已跳过 {skipped} 个不支持文件。")
+            lines.append(self.tr("已跳过 %1 个不支持文件。").arg(str(skipped)))
         if errors:
-            lines.append(f"有 {errors} 个文件处理失败，请查看日志页。")
+            lines.append(self.tr("有 %1 个文件处理失败，请查看日志页。").arg(str(errors)))
         msg = "\n".join(lines)
 
         from PyQt5.QtWidgets import QApplication

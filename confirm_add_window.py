@@ -25,7 +25,7 @@ class ConfirmGameCard(QtWidgets.QFrame):
         h = QtWidgets.QHBoxLayout(self)
         h.setContentsMargins(8, 8, 8, 8)
 
-        self.cover_lbl = QtWidgets.QLabel('没有封面')
+        self.cover_lbl = QtWidgets.QLabel(self.tr("没有封面"))
         self.cover_lbl.setFixedSize(80, 120)
         self.cover_lbl.setAlignment(QtCore.Qt.AlignCenter)
         # 封面占位样式由全局主题控制
@@ -42,7 +42,7 @@ class ConfirmGameCard(QtWidgets.QFrame):
         self.name_lbl.setFont(font)
         v.addWidget(self.name_lbl)
 
-        self.path_lbl = QtWidgets.QLabel('路径: ' + str(self.entry.get('target_path', '')))
+        self.path_lbl = QtWidgets.QLabel(self.tr("路径: ") + str(self.entry.get('target_path', '')))
         self.path_lbl.setStyleSheet('')
         self.path_lbl.setWordWrap(True)
         v.addWidget(self.path_lbl)
@@ -65,19 +65,19 @@ class ConfirmGameCard(QtWidgets.QFrame):
         self.right_btn.clicked.connect(lambda: self.parent_window.move_entry(self.entry, 1))
         btns.addWidget(self.right_btn)
 
-        self.import_btn = QtWidgets.QPushButton('导入封面')
+        self.import_btn = QtWidgets.QPushButton(self.tr("导入封面"))
         self.import_btn.setFixedHeight(22)
         self.import_btn.clicked.connect(lambda: self.parent_window.on_import_cover(self.entry))
         btns.addWidget(self.import_btn)
 
-        self.edit_btn = QtWidgets.QPushButton('编辑')
+        self.edit_btn = QtWidgets.QPushButton(self.tr("编辑"))
         self.edit_btn.setFixedHeight(22)
         self.edit_btn.clicked.connect(lambda: self.parent_window.show_edit_panel(self.entry))
         btns.addWidget(self.edit_btn)
 
         control.addWidget(self.btn_container)
 
-        self.checkbox = QtWidgets.QCheckBox('包含')
+        self.checkbox = QtWidgets.QCheckBox(self.tr("包含"))
         self.checkbox.setChecked(self.entry.get('selected', True))
         self.checkbox.setVisible(False)
         self.checkbox.stateChanged.connect(
@@ -95,19 +95,19 @@ class ConfirmGameCard(QtWidgets.QFrame):
 
     def refresh_text(self):
         self.name_lbl.setText(self.entry.get('app_name', 'Unknown'))
-        self.path_lbl.setText('路径: ' + str(self.entry.get('target_path', '')))
+        self.path_lbl.setText(self.tr("路径: ") + str(self.entry.get('target_path', '')))
 
     def refresh_cover(self):
         cover_bytes = self.entry.get('cover_bytes')
         if not cover_bytes:
             self.cover_lbl.setPixmap(QtGui.QPixmap())
-            self.cover_lbl.setText('没有封面')
+            self.cover_lbl.setText(self.tr("没有封面"))
             return
 
         pix = QtGui.QPixmap()
         if not pix.loadFromData(cover_bytes):
             self.cover_lbl.setPixmap(QtGui.QPixmap())
-            self.cover_lbl.setText('没有封面')
+            self.cover_lbl.setText(self.tr("没有封面"))
             return
 
         self.cover_lbl.setPixmap(
@@ -214,12 +214,12 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         # Search row
         h = QtWidgets.QHBoxLayout()
         self.search_edit = QtWidgets.QLineEdit()
-        self.search_edit.setPlaceholderText('搜索应用...')
+        self.search_edit.setPlaceholderText(self.tr("搜索应用..."))
         self.search_edit.textChanged.connect(self._debounce_refresh)
         self.search_edit.setFixedHeight(30)
         h.addWidget(self.search_edit)
 
-        self.search_btn = QtWidgets.QPushButton('搜索')
+        self.search_btn = QtWidgets.QPushButton(self.tr("搜索"))
         self.search_btn.setFixedHeight(30)
         self.search_btn.setFixedWidth(80)
         self.search_btn.clicked.connect(self._debounce_refresh)
@@ -230,7 +230,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         # self.path_lbl.setStyleSheet('color:gray')
         # main_layout.addWidget(self.path_lbl)
 
-        self.info_label = QtWidgets.QLabel(f'待添加的应用: {len(self.pending_entries)}')
+        self.info_label = QtWidgets.QLabel(self.tr("待添加的应用: %1").arg(str(len(self.pending_entries))))
         self.info_label.setStyleSheet('')
         main_layout.addWidget(self.info_label)
 
@@ -254,14 +254,14 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.scroll.setWidget(self.container)
         left_layout.addWidget(self.scroll)
 
-        self.status_label = QtWidgets.QLabel(f'正在后台生成封面... (0/{len(self.pending_entries)})')
+        self.status_label = QtWidgets.QLabel(self.tr("正在后台生成封面... (0/%1)").arg(str(len(self.pending_entries))))
         self.status_label.setStyleSheet('')
         self.status_label.setMaximumWidth(600)
         self.status_label.setWordWrap(True)
         left_layout.addWidget(self.status_label)
 
         bottom = QtWidgets.QHBoxLayout()
-        self.ignore_btn = QtWidgets.QPushButton('选择忽略的应用')
+        self.ignore_btn = QtWidgets.QPushButton(self.tr("选择忽略的应用"))
         self.ignore_btn.clicked.connect(self._toggle_ignore_mode)
         self.ignore_btn.setFixedHeight(40)
         bottom.addWidget(self.ignore_btn)
@@ -269,20 +269,20 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         bottom.addStretch()
 
         # 添加重启提示标签（开关开启时显示）
-        self.restart_hint_label = QtWidgets.QLabel('写入会重启sunshine')
+        self.restart_hint_label = QtWidgets.QLabel(self.tr("写入会重启sunshine"))
         self.restart_hint_label.setStyleSheet('font-size:8px;padding:0px;margin:0px;')
         from basic_def import restart_sunshine_after_add as current_value
         self.restart_hint_label.setVisible(current_value)
         bottom.addWidget(self.restart_hint_label)
 
-        self.confirm_btn = QtWidgets.QPushButton('写入 Sunshine')
+        self.confirm_btn = QtWidgets.QPushButton(self.tr("写入 Sunshine"))
         self.confirm_btn.setFixedHeight(40)
         self.confirm_btn.setFixedWidth(150)
         self.confirm_btn.setEnabled(False)
         self.confirm_btn.clicked.connect(self._on_confirm_clicked)
         bottom.addWidget(self.confirm_btn)
 
-        cancel_btn = QtWidgets.QPushButton('取消')
+        cancel_btn = QtWidgets.QPushButton(self.tr("取消"))
         cancel_btn.setFixedHeight(40)
         cancel_btn.setFixedWidth(100)
         cancel_btn.clicked.connect(self._on_cancel_clicked)
@@ -306,18 +306,18 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(panel)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        title = QtWidgets.QLabel('编辑应用')
+        title = QtWidgets.QLabel(self.tr("编辑应用"))
         font = title.font()
         font.setBold(True)
         font.setPointSize(font.pointSize() + 2)
         title.setFont(font)
         layout.addWidget(title)
 
-        layout.addWidget(QtWidgets.QLabel('名称:'))
+        layout.addWidget(QtWidgets.QLabel(self.tr("名称:")))
         self.edit_name = QtWidgets.QLineEdit()
         layout.addWidget(self.edit_name)
 
-        layout.addWidget(QtWidgets.QLabel('目标路径:'))
+        layout.addWidget(QtWidgets.QLabel(self.tr("目标路径:")))
         self.edit_target = QtWidgets.QLineEdit()
         self.edit_target.setReadOnly(True)
         self.edit_target.setMinimumHeight(60)
@@ -326,9 +326,9 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         layout.addStretch()
 
         btns = QtWidgets.QHBoxLayout()
-        save_btn = QtWidgets.QPushButton('保存')
+        save_btn = QtWidgets.QPushButton(self.tr("保存"))
         save_btn.setFixedSize(80, 26)
-        cancel_btn = QtWidgets.QPushButton('取消')
+        cancel_btn = QtWidgets.QPushButton(self.tr("取消"))
         cancel_btn.setFixedSize(80, 26)
         save_btn.clicked.connect(self._save_edit)
         cancel_btn.clicked.connect(self._close_edit_panel)
@@ -391,7 +391,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self._entry_card_map = {}
 
         if not self.filtered_entries:
-            label = QtWidgets.QLabel('没有找到待添加的应用')
+            label = QtWidgets.QLabel(self.tr("没有找到待添加的应用"))
             self.grid.addWidget(label, 0, 0)
             self._cards = []
             return
@@ -480,7 +480,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
                     for w in app.topLevelWidgets():
                         if hasattr(w, 'log_tab'):
                             w.log_tab.show_success_notification(
-                                f'已将 {len(ignored_entries)} 个应用添加到忽略列表'
+                                self.tr("已将 %1 个应用添加到忽略列表").arg(str(len(ignored_entries)))
                             )
                             break
             
@@ -489,12 +489,12 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             self._debounce_refresh()
         
         self.ignore_mode = not self.ignore_mode
-        self.ignore_btn.setText('完成选择' if self.ignore_mode else '选择忽略的应用')
+        self.ignore_btn.setText(self.tr("完成选择") if self.ignore_mode else self.tr("选择忽略的应用"))
         for card in self._cards:
             card.set_ignore_mode(self.ignore_mode)
 
     def on_import_cover(self, entry):
-        fp, _ = QtWidgets.QFileDialog.getOpenFileName(self, '选择封面图片', '', '图片 (*.jpg *.jpeg *.png *.bmp)')
+        fp, _ = QtWidgets.QFileDialog.getOpenFileName(self, self.tr("选择封面图片"), '', self.tr("图片 (*.jpg *.jpeg *.png *.bmp)"))
         if not fp:
             return
 
@@ -512,11 +512,11 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             entry['image-path'] = newname
             self._refresh_entry_card(entry)
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, '错误', f'导入封面失败: {e}')
+            QtWidgets.QMessageBox.critical(self, self.tr("错误"), self.tr("导入封面失败: %1").arg(str(e)))
 
     def _start_cover_thread(self):
         if not self.pending_entries:
-            self.status_label.setText('没有应用需要生成封面。')
+            self.status_label.setText(self.tr("没有应用需要生成封面。"))
             self.covers_finished.emit()
             return
 
@@ -542,7 +542,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         success = self._cover_stats.get('success', 0)
         failed = self._cover_stats.get('failed', 0)
         self.status_label.setText(
-            f'封面一一生成完成 ({done}/{total}) | 成功: {success} | 失败: {failed}。请确认应用。'
+            self.tr("封面一一生成完成 (%1/%2) | 成功: %3 | 失败: %4。请确认应用。").arg(str(done)).arg(str(total)).arg(str(success)).arg(str(failed))
         )
         self.confirm_btn.setEnabled(True)
         self._debounce_refresh()
@@ -591,8 +591,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             suffix += f' | {msg}'
 
         self.status_label.setText(
-            f'正在后台生成封面... ({done}/{total}) | 成功: {success} '
-            f'(Steam {steam} / SGDB {sgdb} / 图标 {icon}) | 失败: {failed}{suffix}'
+            self.tr("正在后台生成封面... (%1/%2) | 成功: %3 (Steam %4 / SGDB %5 / 图标 %6) | 失败: %7%8").arg(str(done)).arg(str(total)).arg(str(success)).arg(str(steam)).arg(str(sgdb)).arg(str(icon)).arg(str(failed)).arg(suffix)
         )
 
     def update_restart_hint(self):
@@ -603,7 +602,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
     def _on_confirm_clicked(self):
         selected = [e for e in self.pending_entries if e.get('selected', True)]
         if not selected:
-            QtWidgets.QMessageBox.information(self, '提示', '没有选择任何应用。')
+            QtWidgets.QMessageBox.information(self, self.tr("提示"), self.tr("没有选择任何应用。"))
             return
         self.pending_entries = selected
         self.confirmed.emit(selected)

@@ -77,13 +77,13 @@ class ScannerAddPage(QtWidgets.QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
 
-        title = QtWidgets.QLabel("添加扫描器（beta功能，目前只推荐使用steam和epic扫描器）")
+        title = QtWidgets.QLabel(self.tr("添加扫描器（beta功能，目前只推荐使用steam和epic扫描器）"))
         title.setFont(QtGui.QFont("Segoe UI", 16, QtGui.QFont.Bold))
         root.addWidget(title)
 
         desc = QtWidgets.QLabel(
-            "创建类似 Steam ROM Manager 解析器的扫描器预设。"
-            "支持类型：Steam、Epic、ROM 和自定义文件夹扫描器。"
+            self.tr("创建类似 Steam ROM Manager 解析器的扫描器预设。"
+            "支持类型：Steam、Epic、ROM 和自定义文件夹扫描器。")
         )
         desc.setWordWrap(True)
         desc.setStyleSheet("color:#555;")
@@ -96,66 +96,66 @@ class ScannerAddPage(QtWidgets.QWidget):
         form.setVerticalSpacing(8)
 
         self.name_input = QtWidgets.QLineEdit()
-        self.name_input.setPlaceholderText("扫描器名称，例如 Steam 库")
-        form.addRow("名称：", self.name_input)
+        self.name_input.setPlaceholderText(self.tr("扫描器名称，例如 Steam 库"))
+        form.addRow(self.tr("名称："), self.name_input)
 
         self.type_combo = QtWidgets.QComboBox()
-        self.type_combo.addItem("Steam 库", "steam")
-        self.type_combo.addItem("Epic 清单", "epic")
-        self.type_combo.addItem("ROM 文件夹", "rom")
-        self.type_combo.addItem("自定义文件夹", "custom")
+        self.type_combo.addItem(self.tr("Steam 库"), "steam")
+        self.type_combo.addItem(self.tr("Epic 清单"), "epic")
+        self.type_combo.addItem(self.tr("ROM 文件夹"), "rom")
+        self.type_combo.addItem(self.tr("自定义文件夹"), "custom")
         # update field visibility and possibly auto-fill the name when type changes
         self.type_combo.currentIndexChanged.connect(self._update_type_fields)
-        form.addRow("类型：", self.type_combo)
+        form.addRow(self.tr("类型："), self.type_combo)
 
         source_row = QtWidgets.QHBoxLayout()
         self.source_input = QtWidgets.QLineEdit()
-        self.source_input.setPlaceholderText("留空则自动检测")
+        self.source_input.setPlaceholderText(self.tr("留空则自动检测"))
         # when the source path changes we may want to auto-generate a name
         self.source_input.textChanged.connect(self._on_source_changed)
         source_row.addWidget(self.source_input, 1)
-        source_btn = QtWidgets.QPushButton("浏览")
+        source_btn = QtWidgets.QPushButton(self.tr("浏览"))
         source_btn.clicked.connect(self._browse_source)
         source_row.addWidget(source_btn)
-        form.addRow("源路径：", source_row)
+        form.addRow(self.tr("源路径："), source_row)
 
-        self.enabled_chk = QtWidgets.QCheckBox("启用")
+        self.enabled_chk = QtWidgets.QCheckBox(self.tr("启用"))
         self.enabled_chk.setChecked(True)
         form.addRow("", self.enabled_chk)
 
-        self.recursive_chk = QtWidgets.QCheckBox("递归扫描子文件夹")
+        self.recursive_chk = QtWidgets.QCheckBox(self.tr("递归扫描子文件夹"))
         self.recursive_chk.setChecked(True)
         form.addRow("", self.recursive_chk)
 
-        self.hidden_chk = QtWidgets.QCheckBox("包含隐藏文件")
+        self.hidden_chk = QtWidgets.QCheckBox(self.tr("包含隐藏文件"))
         self.hidden_chk.setChecked(False)
         form.addRow("", self.hidden_chk)
 
         emu_row = QtWidgets.QHBoxLayout()
         self.emulator_input = QtWidgets.QLineEdit()
-        self.emulator_input.setPlaceholderText("仅限 ROM 类型：模拟器可执行文件路径")
+        self.emulator_input.setPlaceholderText(self.tr("仅限 ROM 类型：模拟器可执行文件路径"))
         emu_row.addWidget(self.emulator_input, 1)
-        emu_btn = QtWidgets.QPushButton("浏览")
+        emu_btn = QtWidgets.QPushButton(self.tr("浏览"))
         emu_btn.clicked.connect(self._browse_emulator)
         emu_row.addWidget(emu_btn)
-        form.addRow("模拟器：", emu_row)
+        form.addRow(self.tr("模拟器："), emu_row)
 
         self.args_input = QtWidgets.QLineEdit("{rom}")
-        self.args_input.setPlaceholderText("参数模板，使用 {rom} 占位符")
-        form.addRow("参数：", self.args_input)
+        self.args_input.setPlaceholderText(self.tr("参数模板，使用 {rom} 占位符"))
+        form.addRow(self.tr("参数："), self.args_input)
 
         self.rom_ext_input = QtWidgets.QLineEdit(".zip,.7z,.iso,.cue,.chd")
-        self.rom_ext_input.setPlaceholderText("ROM 扩展名，逗号分隔")
-        form.addRow("ROM 扩展名：", self.rom_ext_input)
+        self.rom_ext_input.setPlaceholderText(self.tr("ROM 扩展名，逗号分隔"))
+        form.addRow(self.tr("ROM 扩展名："), self.rom_ext_input)
 
         root.addLayout(form)
 
         row = QtWidgets.QHBoxLayout()
-        add_btn = QtWidgets.QPushButton("添加扫描器")
+        add_btn = QtWidgets.QPushButton(self.tr("添加扫描器"))
         add_btn.clicked.connect(self._on_add_scanner)
         row.addWidget(add_btn)
 
-        reset_btn = QtWidgets.QPushButton("重置")
+        reset_btn = QtWidgets.QPushButton(self.tr("重置"))
         reset_btn.clicked.connect(self._reset_form)
         row.addWidget(reset_btn)
         row.addStretch()
@@ -173,7 +173,7 @@ class ScannerAddPage(QtWidgets.QWidget):
 
     def _update_saved_count(self):
         count = len(load_scanners())
-        self.saved_label.setText(f"已保存的扫描器：{count}")
+        self.saved_label.setText(self.tr("已保存的扫描器： %1").arg(str(count)))
 
     def _auto_fill_name(self):
         """Generate a reasonable default name based on type and source.
@@ -186,27 +186,27 @@ class ScannerAddPage(QtWidgets.QWidget):
         name = ""
 
         if scanner_type == "steam":
-            name = "Steam 库"
+            name = self.tr("Steam 库")
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = f"Steam 库 ({base})"
+                    name = self.tr("Steam 库 (%1)").arg(base)
         elif scanner_type == "epic":
-            name = "Epic 清单"
+            name = self.tr("Epic 清单")
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = f"Epic 清单 ({base})"
+                    name = self.tr("Epic 清单 (%1)").arg(base)
         elif scanner_type == "rom":
             if source:
                 name = os.path.basename(source.rstrip("\\/"))
             else:
-                name = "ROM 扫描器"
+                name = self.tr("ROM 扫描器")
         else:  # custom
             if source:
                 name = os.path.basename(source.rstrip("\\/"))
             else:
-                name = "自定义文件夹"
+                name = self.tr("自定义文件夹")
 
         # only update the field if it's currently empty or matches the last
         # auto-generated value we produced earlier
@@ -231,11 +231,11 @@ class ScannerAddPage(QtWidgets.QWidget):
         self.emulator_input.clear()
         self.args_input.setText("{rom}")
         self.rom_ext_input.setText(".zip,.7z,.iso,.cue,.chd")
-        self.status_label.setText("表单已重置。")
+        self.status_label.setText(self.tr("表单已重置。"))
         self._update_type_fields()
 
     def _browse_source(self):
-        directory = QtWidgets.QFileDialog.getExistingDirectory(self, "选择扫描器源文件夹")
+        directory = QtWidgets.QFileDialog.getExistingDirectory(self, self.tr("选择扫描器源文件夹"))
         if directory:
             self.source_input.setText(os.path.normpath(directory))
             # browsing sets the source text which in turn may auto-fill the name
@@ -243,7 +243,7 @@ class ScannerAddPage(QtWidgets.QWidget):
 
     def _browse_emulator(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "选择模拟器可执行文件", "", "可执行文件 (*.exe);;所有文件 (*.*)"
+            self, self.tr("选择模拟器可执行文件"), "", self.tr("可执行文件 (*.exe);;所有文件 (*.*)")
         )
         if file_path:
             self.emulator_input.setText(os.path.normpath(file_path))
@@ -262,13 +262,13 @@ class ScannerAddPage(QtWidgets.QWidget):
         self.hidden_chk.setEnabled(rom_mode or custom_mode)
 
         if scanner_type == "steam":
-            self.source_input.setPlaceholderText("可选的 Steam 根路径（留空则自动检测，无特殊需求留空即可）")
+            self.source_input.setPlaceholderText(self.tr("可选的 Steam 根路径（留空则自动检测，无特殊需求留空即可）"))
         elif scanner_type == "epic":
-            self.source_input.setPlaceholderText("可选的 Epic 清单目录（留空则自动检测，无特殊需求留空即可）")
+            self.source_input.setPlaceholderText(self.tr("可选的 Epic 清单目录（留空则自动检测，无特殊需求留空即可）"))
         elif scanner_type == "rom":
-            self.source_input.setPlaceholderText("ROM 目录")
+            self.source_input.setPlaceholderText(self.tr("ROM 目录"))
         else:
-            self.source_input.setPlaceholderText("要扫描的文件夹，查找 .exe/.lnk/.url")
+            self.source_input.setPlaceholderText(self.tr("要扫描的文件夹，查找 .exe/.lnk/.url"))
 
         if steam_or_epic_mode and not self.source_input.text().strip():
             self.recursive_chk.setChecked(False)
@@ -284,11 +284,11 @@ class ScannerAddPage(QtWidgets.QWidget):
         emulator_path = self.emulator_input.text().strip()
 
         if not name:
-            raise ValueError("扫描器名称是必需的。")
+            raise ValueError(self.tr("扫描器名称是必需的。"))
         if scanner_type in ("rom", "custom") and not source:
-            raise ValueError("ROM/自定义扫描器需要源文件夹。")
+            raise ValueError(self.tr("ROM/自定义扫描器需要源文件夹。"))
         if scanner_type == "rom" and not emulator_path:
-            raise ValueError("ROM 扫描器需要模拟器路径。")
+            raise ValueError(self.tr("ROM 扫描器需要模拟器路径。"))
 
         return normalize_scanner({
             "name": name,
@@ -319,12 +319,12 @@ class ScannerAddPage(QtWidgets.QWidget):
                     str(s.get("source", "")).strip().lower(),
                 )
                 if existing_key == scanner_key:
-                    raise ValueError("已存在相同类型/名称/源的扫描器。")
+                    raise ValueError(self.tr("已存在相同类型/名称/源的扫描器。"))
 
             scanners.append(scanner)
             save_scanners(scanners)
-            self.status_label.setText(f"已添加扫描器：{scanner['name']}")
+            self.status_label.setText(self.tr("已添加扫描器： %1").arg(scanner['name']))
             self._update_saved_count()
             self.scanners_changed.emit()
         except Exception as e:
-            self.status_label.setText(f"添加扫描器失败：{e}")
+            self.status_label.setText(self.tr("添加扫描器失败： %1").arg(str(e)))

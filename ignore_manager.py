@@ -21,12 +21,12 @@ class IgnoreManager(QtWidgets.QWidget):
         layout.setSpacing(10)
 
         # 标题
-        title = QtWidgets.QLabel('忽略列表管理')
+        title = QtWidgets.QLabel(self.tr("忽略列表管理"))
         title.setFont(QtGui.QFont('Microsoft YaHei', 14, QtGui.QFont.Bold))
         layout.addWidget(title)
 
         # 说明
-        desc = QtWidgets.QLabel('在此管理被忽略的应用列表。这些应用在下次扫描时将被自动跳过。')
+        desc = QtWidgets.QLabel(self.tr("在此管理被忽略的应用列表。这些应用在下次扫描时将被自动跳过。"))
         desc.setWordWrap(True)
         desc.setStyleSheet('color: #666;')
         layout.addWidget(desc)
@@ -39,21 +39,21 @@ class IgnoreManager(QtWidgets.QWidget):
         # 按钮区域
         button_layout = QtWidgets.QHBoxLayout()
 
-        self.add_btn = QtWidgets.QPushButton('添加')
+        self.add_btn = QtWidgets.QPushButton(self.tr("添加"))
         self.add_btn.clicked.connect(self._add_ignored_app)
         button_layout.addWidget(self.add_btn)
 
-        self.remove_btn = QtWidgets.QPushButton('删除选中')
+        self.remove_btn = QtWidgets.QPushButton(self.tr("删除选中"))
         self.remove_btn.clicked.connect(self._remove_selected)
         button_layout.addWidget(self.remove_btn)
 
-        self.clear_btn = QtWidgets.QPushButton('清空列表')
+        self.clear_btn = QtWidgets.QPushButton(self.tr("清空列表"))
         self.clear_btn.clicked.connect(self._clear_all)
         button_layout.addWidget(self.clear_btn)
 
         button_layout.addStretch()
 
-        self.refresh_btn = QtWidgets.QPushButton('刷新')
+        self.refresh_btn = QtWidgets.QPushButton(self.tr("刷新"))
         self.refresh_btn.clicked.connect(self._refresh_list)
         button_layout.addWidget(self.refresh_btn)
 
@@ -78,12 +78,12 @@ class IgnoreManager(QtWidgets.QWidget):
             item.setData(QtCore.Qt.UserRole, app)
             self.list_widget.addItem(item)
         
-        self.status_label.setText(f'共 {len(self.ignored_apps)} 个被忽略的应用')
+        self.status_label.setText(self.tr("共 %1 个被忽略的应用").arg(str(len(self.ignored_apps))))
 
     def _add_ignored_app(self):
         # 打开文件对话框选择应用
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, '选择要忽略的应用', '', '可执行文件 (*.exe);;所有文件 (*.*)'
+            self, self.tr("选择要忽略的应用"), '', self.tr("可执行文件 (*.exe);;所有文件 (*.*)")
         )
         if not file_path:
             return
@@ -93,7 +93,7 @@ class IgnoreManager(QtWidgets.QWidget):
         # 检查是否已存在
         for app in self.ignored_apps:
             if app.get('path') == file_path:
-                QtWidgets.QMessageBox.information(self, '提示', '该应用已在忽略列表中')
+                QtWidgets.QMessageBox.information(self, self.tr("提示"), self.tr("该应用已在忽略列表中"))
                 return
 
         # 添加到列表
@@ -104,17 +104,17 @@ class IgnoreManager(QtWidgets.QWidget):
 
         self._save_config()
         self._refresh_list()
-        QtWidgets.QMessageBox.information(self, '成功', f'已添加 "{app_name}" 到忽略列表')
+        QtWidgets.QMessageBox.information(self, self.tr("成功"), self.tr('已添加 "%1" 到忽略列表').arg(app_name))
 
     def _remove_selected(self):
         selected_items = self.list_widget.selectedItems()
         if not selected_items:
-            QtWidgets.QMessageBox.information(self, '提示', '请先选择要删除的项目')
+            QtWidgets.QMessageBox.information(self, self.tr("提示"), self.tr("请先选择要删除的项目"))
             return
 
         reply = QtWidgets.QMessageBox.question(
-            self, '确认删除',
-            f'确定要删除选中的 {len(selected_items)} 个项目吗？',
+            self, self.tr("确认删除"),
+            self.tr("确定要删除选中的 %1 个项目吗？").arg(str(len(selected_items))),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
 
@@ -129,12 +129,12 @@ class IgnoreManager(QtWidgets.QWidget):
 
     def _clear_all(self):
         if not self.ignored_apps:
-            QtWidgets.QMessageBox.information(self, '提示', '忽略列表为空')
+            QtWidgets.QMessageBox.information(self, self.tr("提示"), self.tr("忽略列表为空"))
             return
 
         reply = QtWidgets.QMessageBox.question(
-            self, '确认清空',
-            '确定要清空整个忽略列表吗？',
+            self, self.tr("确认清空"),
+            self.tr("确定要清空整个忽略列表吗？"),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
 
