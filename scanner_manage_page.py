@@ -674,7 +674,7 @@ class ScannerManagePage(QtWidgets.QWidget):
                 item.setData(QtCore.Qt.UserRole, scanner.get("id"))
                 self.table.setItem(row, col, item)
 
-        self.status_label.setText(self.tr("已加载扫描器： %1").arg(str(len(self.scanners))))
+        self.status_label.setText(self.tr("已加载扫描器： %1").replace("%1", str(len(self.scanners))))
 
     def toggle_selected_enabled(self):
         rows = self._selected_rows()

@@ -117,7 +117,7 @@ class EditGameCard(QtWidgets.QFrame):
 
     def on_delete(self):
         name = self.entry.get('name', self.tr("未知游戏"))
-        if QtWidgets.QMessageBox.question(self, self.tr("确认删除"), self.tr("确定要删除游戏 '%1' 吗？").arg(name)) != QtWidgets.QMessageBox.Yes:
+        if QtWidgets.QMessageBox.question(self, self.tr("确认删除"), self.tr("确定要删除游戏 '%1' 吗？").replace('%1', name)) != QtWidgets.QMessageBox.Yes:
             return
         for i, e in enumerate(self.apps_json.get('apps', [])):
             if e is self.entry or e == self.entry:
@@ -195,7 +195,7 @@ class EditGameCard(QtWidgets.QFrame):
             IMAGE_CACHE.clear()  # clear cache so new thumb used
             self.refresh_cb()
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, self.tr("错误"), self.tr("更换封面失败: %1").arg(str(e)))
+            QtWidgets.QMessageBox.critical(self, self.tr("错误"), self.tr("更换封面失败: %1").replace('%1', str(e)))
 
     def _change_cover_with_sgdb(self):
         """使用 SGDB 选择封面"""
@@ -300,7 +300,7 @@ class ManageWindow(QtWidgets.QWidget):
         
         main_layout.addLayout(h_split)
 
-        self.path_lbl.setText(self.tr("当前加载路径: %1").arg(self.apps_json_path))
+        self.path_lbl.setText(self.tr("当前加载路径: %1").replace('%1', self.apps_json_path))
         # 安装容器的事件过滤器以响应子控件尺寸变化
         self.container.installEventFilter(self)
         self._do_refresh()

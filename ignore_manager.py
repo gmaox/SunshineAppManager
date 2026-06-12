@@ -78,7 +78,7 @@ class IgnoreManager(QtWidgets.QWidget):
             item.setData(QtCore.Qt.UserRole, app)
             self.list_widget.addItem(item)
         
-        self.status_label.setText(self.tr("共 %1 个被忽略的应用").arg(str(len(self.ignored_apps))))
+        self.status_label.setText(self.tr("共 %1 个被忽略的应用").replace('%1', str(len(self.ignored_apps))))
 
     def _add_ignored_app(self):
         # 打开文件对话框选择应用
@@ -104,7 +104,7 @@ class IgnoreManager(QtWidgets.QWidget):
 
         self._save_config()
         self._refresh_list()
-        QtWidgets.QMessageBox.information(self, self.tr("成功"), self.tr('已添加 "%1" 到忽略列表').arg(app_name))
+        QtWidgets.QMessageBox.information(self, self.tr("成功"), self.tr('已添加 "%1" 到忽略列表').replace('%1', app_name))
 
     def _remove_selected(self):
         selected_items = self.list_widget.selectedItems()
@@ -114,7 +114,7 @@ class IgnoreManager(QtWidgets.QWidget):
 
         reply = QtWidgets.QMessageBox.question(
             self, self.tr("确认删除"),
-            self.tr("确定要删除选中的 %1 个项目吗？").arg(str(len(selected_items))),
+            self.tr("确定要删除选中的 %1 个项目吗？").replace('%1', str(len(selected_items))),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
 

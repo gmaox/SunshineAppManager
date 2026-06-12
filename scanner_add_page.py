@@ -173,7 +173,7 @@ class ScannerAddPage(QtWidgets.QWidget):
 
     def _update_saved_count(self):
         count = len(load_scanners())
-        self.saved_label.setText(self.tr("已保存的扫描器： %1").arg(str(count)))
+        self.saved_label.setText(self.tr("已保存的扫描器： %1").replace('%1', str(count)))
 
     def _auto_fill_name(self):
         """Generate a reasonable default name based on type and source.
@@ -190,13 +190,13 @@ class ScannerAddPage(QtWidgets.QWidget):
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = self.tr("Steam 库 (%1)").arg(base)
+                    name = self.tr("Steam 库 (%1)").replace('%1', base)
         elif scanner_type == "epic":
             name = self.tr("Epic 清单")
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = self.tr("Epic 清单 (%1)").arg(base)
+                    name = self.tr("Epic 清单 (%1)").replace('%1', base)
         elif scanner_type == "rom":
             if source:
                 name = os.path.basename(source.rstrip("\\/"))
@@ -323,8 +323,8 @@ class ScannerAddPage(QtWidgets.QWidget):
 
             scanners.append(scanner)
             save_scanners(scanners)
-            self.status_label.setText(self.tr("已添加扫描器： %1").arg(scanner['name']))
+            self.status_label.setText(self.tr("已添加扫描器： %1").replace('%1', scanner['name']))
             self._update_saved_count()
             self.scanners_changed.emit()
         except Exception as e:
-            self.status_label.setText(self.tr("添加扫描器失败： %1").arg(str(e)))
+            self.status_label.setText(self.tr("添加扫描器失败： %1").replace('%1', str(e)))
