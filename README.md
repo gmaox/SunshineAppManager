@@ -2,6 +2,8 @@
 
 将工作目录所有快捷方式一键导入到sunshine应用程序并自动处理封面<p>
 
+简体中文 | [English](README_en.md)
+
 <!--[蓝奏云下载链接](https://wwse.lanzoub.com/b00uymuaha) 密码:9cj7-->
 
 界面一览：
