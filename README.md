@@ -1,6 +1,5 @@
 # Sunshine App Manager
 
-将工作目录所有快捷方式一键导入到sunshine应用程序并自动处理封面<p>
 <details>
 <summary>
 English README
@@ -47,9 +46,11 @@ END
 
 </details>
 
+将工作目录所有快捷方式一键导入到sunshine应用程序并自动处理封面<p>
+
 界面一览：
 
-<img width="899" height="526" alt="image" src="https://github.com/user-attachments/assets/821cf36c-0baa-42b5-90b4-d346466b8a65" />
+<img width="1116" height="638" alt="image" src="https://github.com/user-attachments/assets/ae1f1bbf-9106-4c2e-8e81-743a7ca7c9cb" />
 
 效果如下：
 ![屏幕截图 2025-01-11 004411](https://github.com/user-attachments/assets/d36d32de-b27f-4536-9e73-0547b5129462)
