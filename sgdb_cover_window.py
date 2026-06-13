@@ -235,7 +235,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         self._start_search(self.app_name)
 
     def _setup_ui(self):
-        self.setWindowTitle(self.tr("SGDB封面选择 - %1").arg(self.app_name))
+        self.setWindowTitle(self.tr("SGDB封面选择 - %1").replace('%1', self.app_name))
         self.resize(900, 480)
 
         main = QtWidgets.QVBoxLayout(self)
@@ -284,7 +284,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         split.setSizes([340, 640])
 
         if isinstance(self.remaining_games, int) and self.remaining_games > 1:
-            main.addWidget(QtWidgets.QLabel(self.tr("剩余待选封面: %1 个").arg(str(self.remaining_games))))
+            main.addWidget(QtWidgets.QLabel(self.tr("剩余待选封面: %1 个").replace('%1', str(self.remaining_games))))
 
         self.status_label = QtWidgets.QLabel(f"网络模式: {self.net_mode}")
         self.status_label.setStyleSheet("color:#2E7D9B;")
@@ -337,7 +337,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
             url = f"https://www.bing.com/images/search?q={query}"
             webbrowser.open(url)
         except Exception as e:
-            self._set_status(self.tr("打开浏览器失败: %1").arg(str(e)))
+            self._set_status(self.tr("打开浏览器失败: %1").replace('%1', str(e)))
             return
 
         hint = ClipboardCoverHintWindow(self)
@@ -365,7 +365,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         try:
             webbrowser.open(url)
         except Exception as e:
-            self._set_status(self.tr("打开浏览器失败: %1").arg(str(e)))
+            self._set_status(self.tr("打开浏览器失败: %1").replace('%1', str(e)))
             return
 
         hint = ClipboardCoverHintWindow(self)
@@ -380,7 +380,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 
         self._search_token += 1
         token = self._search_token
-        self._set_status(self.tr("正在搜索: %1").arg(name))
+        self._set_status(self.tr("正在搜索: %1").replace('%1', name))
         self.game_list.clear()
         self._clear_thumbs()
 
@@ -406,23 +406,24 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
             self.game_list.addItem(item)
 
         if self.parent_dir_name and _normalize_text(self.parent_dir_name) != _normalize_text(query_name):
-            item = QtWidgets.QListWidgetItem(self.tr("使用 %1 搜索").arg(self.parent_dir_name))
+            item = QtWidgets.QListWidgetItem(self.tr("使用 %1 搜索").replace('%1', self.parent_dir_name))
             item.setData(QtCore.Qt.UserRole, {"use_parent_search": True})
             self.game_list.addItem(item)
 
         if self.game_list.count() == 0:
-            self._set_status(self.tr("未找到搜索结果: %1").arg(query_name))
+            self._set_status(self.tr("未找到搜索结果: %1").replace('%1', query_name))
             return
 
         self.game_list.setCurrentRow(0)
-        self._set_status(self.tr("搜索完成: %1，共 %2 条").arg(query_name).arg(str(len(self._all_search_games))))
+        text = self.tr("搜索完成: %1，共 %2 条").replace('%1', query_name).replace('%2', str(len(self._all_search_games)))
+        self._set_status(text)
         self._load_selected_game_grids()
 
     @QtCore.pyqtSlot(int, str)
     def _on_search_error(self, token, message):
         if token != self._search_token:
             return
-        self._set_status(self.tr("搜索失败: %1").arg(message))
+        self._set_status(self.tr("搜索失败: %1").replace('%1', message))
 
     def _load_selected_game_grids(self):
         item = self.game_list.currentItem()
@@ -443,7 +444,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 
         self._grid_token += 1
         token = self._grid_token
-        self._set_status(self.tr("正在获取封面: %1").arg(self.selected_game_name))
+        self._set_status(self.tr("正在获取封面: %1").replace('%1', self.selected_game_name))
         self._clear_thumbs()
 
         def worker():
@@ -467,7 +468,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         self._clear_thumbs()
 
         if not self._grid_data:
-            self._set_status(self.tr("未找到封面: %1").arg(game_name))
+            self._set_status(self.tr("未找到封面: %1").replace('%1', game_name))
             return
 
         for idx, grid in enumerate(self._grid_data):
@@ -479,13 +480,13 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
             self._grid_buttons.append(btn)
             self._start_load_thumb(token, idx, grid)
 
-        self._set_status(self.tr("正在加载缩略图: 0/%1").arg(str(self._thumb_total)))
+        self._set_status(self.tr("正在加载缩略图: 0/%1").replace('%1', str(self._thumb_total)))
 
     @QtCore.pyqtSlot(int, str)
     def _on_grids_error(self, token, message):
         if token != self._grid_token:
             return
-        self._set_status(self.tr("获取封面失败: %1").arg(message))
+        self._set_status(self.tr("获取封面失败: %1").replace('%1', message))
 
     def _start_load_thumb(self, token, idx, grid):
         thumb_url = grid.get("url") or grid.get("thumb")
@@ -517,7 +518,8 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         btn.setText("")
         btn.setEnabled(True)
         self._thumb_loaded += 1
-        self._set_status(self.tr("正在加载缩略图: %1/%2").arg(str(self._thumb_loaded)).arg(str(self._thumb_total)))
+        text = self.tr("正在加载缩略图: %1/%2").replace('%1', str(self._thumb_loaded)).replace('%2', str(self._thumb_total))
+        self._set_status(text)
 
     @QtCore.pyqtSlot(int, int, str)
     def _on_thumb_error(self, token, idx, message):
@@ -527,13 +529,14 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
         btn.setText(self.tr("加载失败"))
         btn.setEnabled(False)
         self._thumb_loaded += 1
-        self._set_status(self.tr("缩略图加载异常(%1/%2): %3").arg(str(self._thumb_loaded)).arg(str(self._thumb_total)).arg(message))
+        text = self.tr("缩略图加载异常(%1/%2): %3").replace('%1', str(self._thumb_loaded)).replace('%2', str(self._thumb_total)).replace('%3', message)
+        self._set_status(text)
 
     def _select_grid(self, idx):
         if idx >= len(self._grid_data):
             return
         grid = self._grid_data[idx]
-        self._set_status(self.tr("正在下载封面: %1").arg(self.selected_game_name or self.app_name))
+        self._set_status(self.tr("正在下载封面: %1").replace('%1', self.selected_game_name or self.app_name))
 
         # 使用缓存的字节，如果有的话
         cached_raw = grid.get('cached_bytes')
@@ -583,7 +586,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
 
     @QtCore.pyqtSlot(str)
     def _on_cover_error(self, message):
-        self._set_status(self.tr("封面保存失败: %1").arg(message))
+        self._set_status(self.tr("封面保存失败: %1").replace('%1', message))
 
     def _select_local_image(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -617,7 +620,7 @@ class SgdbCoverPickerDialog(QtWidgets.QDialog):
             self.used_icon = False
             self.accept()
         except Exception as e:
-            self._set_status(self.tr("处理本地图片失败: %1").arg(str(e)))
+            self._set_status(self.tr("处理本地图片失败: %1").replace('%1', str(e)))
 
     def _clear_thumbs(self):
         while self.thumb_grid.count():
@@ -718,7 +721,7 @@ class ClipboardCoverHintWindow(QtWidgets.QDialog):
             self.parent_dialog.accept()
             self.close()
         except Exception as e:
-            self.parent_dialog._set_status(self.tr("读取剪贴板图像失败: %1").arg(str(e)))
+            self.parent_dialog._set_status(self.tr("读取剪贴板图像失败: %1").replace('%1', str(e)))
 
 def choose_cover_with_sgdb_qt(app_name, output_path, exe_path=None, remaining_games=None):
     app = QtWidgets.QApplication.instance()

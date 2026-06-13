@@ -27,16 +27,16 @@ class AddGameWindow(QWidget):
             notify_run_error(
                 self.tr("无法访问 Sunshine 配置目录，可能需要管理员权限。\n\n"
                         "目标路径: %1\n\n"
-                        "详情: %2").arg(get_covers_dir()).arg(str(e))
+                        "详情: %2").replace('%1', get_covers_dir()).replace('%2', str(e))
             )
         except OSError as e:
             notify_run_error(
                 self.tr("访问 Sunshine 配置路径时出错。\n\n"
                         "目标路径: %1\n\n"
-                        "详情: %2").arg(get_covers_dir()).arg(str(e))
+                        "详情: %2").replace('%1', get_covers_dir()).replace('%2', str(e))
             )
         except Exception as e:
-            notify_run_error(self.tr("运行失败: %1").arg(str(e)))
+            notify_run_error(self.tr("运行失败: %1").replace('%1', str(e)))
     
     def init_ui(self):
         """初始化UI界面"""
@@ -295,16 +295,14 @@ class AddGameWindow(QWidget):
 
         # 用非阻塞通知显示结果
         from PyQt5.QtWidgets import QApplication
-        msg = (
-            self.tr("已运行 %1 个扫描器\n"
-                    "创建 %2, 跳过 %3, 错误 %4\n"
-                    "输出文件夹: %5")
-            .arg(str(len(scanners)))
-            .arg(str(total_created))
-            .arg(str(total_skipped))
-            .arg(str(total_errors))
-            .arg(work_folder)
-        )
+        msg = self.tr("已运行 %1 个扫描器\n"
+                      "创建 %2, 跳过 %3, 错误 %4\n"
+                      "输出文件夹: %5")
+        msg = msg.replace('%1', str(len(scanners)))
+        msg = msg.replace('%2', str(total_created))
+        msg = msg.replace('%3', str(total_skipped))
+        msg = msg.replace('%4', str(total_errors))
+        msg = msg.replace('%5', work_folder)
         print(msg)  # 同时打印到日志
         app = QApplication.instance()
         if app:
@@ -367,12 +365,12 @@ class AddGameWindow(QWidget):
         skipped_count = len(result.get('skipped', []))
         error_count = len(result.get('errors', []))
 
-        lines = [self.tr("已在工作文件夹创建 %1 个快捷方式。").arg(str(created_count))]
+        lines = [self.tr("已在工作文件夹创建 %1 个快捷方式。").replace('%1', str(created_count))]
         if skipped_count:
-            lines.append(self.tr("已跳过 %1 个不支持文件。").arg(str(skipped_count)))
+            lines.append(self.tr("已跳过 %1 个不支持文件。").replace('%1', str(skipped_count)))
         if error_count:
-            lines.append(self.tr("有 %1 个文件处理失败，请查看日志页。").arg(str(error_count)))
-        lines.append(self.tr("工作文件夹: %1").arg(result.get('work_folder', '')))
+            lines.append(self.tr("有 %1 个文件处理失败，请查看日志页。").replace('%1', str(error_count)))
+        lines.append(self.tr("工作文件夹: %1").replace('%1', result.get('work_folder', '')))
 
         # 用成功通知代替阻塞对话框
         from PyQt5.QtWidgets import QApplication
@@ -527,11 +525,11 @@ class AddGameWindow(QWidget):
         skipped = len(result.get('skipped', []))
         errors = len(result.get('errors', []))
 
-        lines = [self.tr("已在工作文件夹创建 %1 个快捷方式。").arg(str(created))]
+        lines = [self.tr("已在工作文件夹创建 %1 个快捷方式。").replace('%1', str(created))]
         if skipped:
-            lines.append(self.tr("已跳过 %1 个不支持文件。").arg(str(skipped)))
+            lines.append(self.tr("已跳过 %1 个不支持文件。").replace('%1', str(skipped)))
         if errors:
-            lines.append(self.tr("有 %1 个文件处理失败，请查看日志页。").arg(str(errors)))
+            lines.append(self.tr("有 %1 个文件处理失败，请查看日志页。").replace('%1', str(errors)))
         msg = "\n".join(lines)
 
         from PyQt5.QtWidgets import QApplication

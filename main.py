@@ -593,7 +593,7 @@ class MainWindow(QMainWindow):
                 v.addWidget(scanner_manage_widget)
             else:
                 # 其他标签页 - 显示占位符
-                label = QLabel(self.tr("这是标签页%1的内容").arg(str(i+1)))
+                label = QLabel(self.tr("这是标签页%1的内容").replace('%1', str(i+1)))
                 label.setAlignment(Qt.AlignCenter)
                 label.setFont(QFont("Segoe UI", 14))
                 v.addStretch()
@@ -682,7 +682,7 @@ class MainWindow(QMainWindow):
             self.stacked.setCurrentIndex(0)
         except Exception as e:
             from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.critical(self, self.tr("错误"), self.tr("处理确认添加时出错: %1").arg(str(e)))
+            QMessageBox.critical(self, self.tr("错误"), self.tr("处理确认添加时出错: %1").replace('%1', str(e)))
     
     def _on_confirm_add_cancelled(self):
         """取消添加时的处理"""

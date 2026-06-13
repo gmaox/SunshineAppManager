@@ -230,7 +230,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         # self.path_lbl.setStyleSheet('color:gray')
         # main_layout.addWidget(self.path_lbl)
 
-        self.info_label = QtWidgets.QLabel(self.tr("待添加的应用: %1").arg(str(len(self.pending_entries))))
+        self.info_label = QtWidgets.QLabel(self.tr("待添加的应用: %1").replace('%1', str(len(self.pending_entries))))
         self.info_label.setStyleSheet('')
         main_layout.addWidget(self.info_label)
 
@@ -254,7 +254,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self.scroll.setWidget(self.container)
         left_layout.addWidget(self.scroll)
 
-        self.status_label = QtWidgets.QLabel(self.tr("正在后台生成封面... (0/%1)").arg(str(len(self.pending_entries))))
+        self.status_label = QtWidgets.QLabel(self.tr("正在后台生成封面... (0/%1)").replace('%1', str(len(self.pending_entries))))
         self.status_label.setStyleSheet('')
         self.status_label.setMaximumWidth(600)
         self.status_label.setWordWrap(True)
@@ -480,7 +480,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
                     for w in app.topLevelWidgets():
                         if hasattr(w, 'log_tab'):
                             w.log_tab.show_success_notification(
-                                self.tr("已将 %1 个应用添加到忽略列表").arg(str(len(ignored_entries)))
+                                self.tr("已将 %1 个应用添加到忽略列表").replace('%1', str(len(ignored_entries)))
                             )
                             break
             
@@ -512,7 +512,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
             entry['image-path'] = newname
             self._refresh_entry_card(entry)
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, self.tr("错误"), self.tr("导入封面失败: %1").arg(str(e)))
+            QtWidgets.QMessageBox.critical(self, self.tr("错误"), self.tr("导入封面失败: %1").replace('%1', str(e)))
 
     def _start_cover_thread(self):
         if not self.pending_entries:
@@ -541,9 +541,9 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         total = self._cover_stats.get('total', len(self.pending_entries))
         success = self._cover_stats.get('success', 0)
         failed = self._cover_stats.get('failed', 0)
-        self.status_label.setText(
-            self.tr("封面一一生成完成 (%1/%2) | 成功: %3 | 失败: %4。请确认应用。").arg(str(done)).arg(str(total)).arg(str(success)).arg(str(failed))
-        )
+        text = self.tr("封面一一生成完成 (%1/%2) | 成功: %3 | 失败: %4。请确认应用。")
+        text = text.replace('%1', str(done)).replace('%2', str(total)).replace('%3', str(success)).replace('%4', str(failed))
+        self.status_label.setText(text)
         self.confirm_btn.setEnabled(True)
         self._debounce_refresh()
 
@@ -590,9 +590,11 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         if msg:
             suffix += f' | {msg}'
 
-        self.status_label.setText(
-            self.tr("正在后台生成封面... (%1/%2) | 成功: %3 (Steam %4 / SGDB %5 / 图标 %6) | 失败: %7%8").arg(str(done)).arg(str(total)).arg(str(success)).arg(str(steam)).arg(str(sgdb)).arg(str(icon)).arg(str(failed)).arg(suffix)
-        )
+        status_text = self.tr("正在后台生成封面... (%1/%2) | 成功: %3 (Steam %4 / SGDB %5 / 图标 %6) | 失败: %7%8")
+        status_text = status_text.replace('%1', str(done)).replace('%2', str(total)).replace('%3', str(success))
+        status_text = status_text.replace('%4', str(steam)).replace('%5', str(sgdb)).replace('%6', str(icon))
+        status_text = status_text.replace('%7', str(failed)).replace('%8', suffix)
+        self.status_label.setText(status_text)
 
     def update_restart_hint(self):
         """更新重启提示标签的显示状态"""

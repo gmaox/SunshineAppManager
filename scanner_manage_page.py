@@ -512,13 +512,13 @@ class ScannerEditDialog(QtWidgets.QDialog):
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = self.tr("Steam 库 (%1)").arg(base)
+                    name = self.tr("Steam 库 (%1)").replace('%1', base)
         elif scanner_type == "epic":
             name = self.tr("Epic 清单")
             if source:
                 base = os.path.basename(source.rstrip("\\/"))
                 if base:
-                    name = self.tr("Epic 清单 (%1)").arg(base)
+                    name = self.tr("Epic 清单 (%1)").replace('%1', base)
         elif scanner_type == "rom":
             if source:
                 name = os.path.basename(source.rstrip("\\/"))
@@ -702,7 +702,7 @@ class ScannerManagePage(QtWidgets.QWidget):
         self.scanners[row] = dlg.updated_scanner()
         save_scanners(self.scanners)
         self.reload_scanners()
-        self.status_label.setText(self.tr("已更新扫描器： %1").arg(self.scanners[row].get('name', '')))
+        self.status_label.setText(self.tr("已更新扫描器： %1").replace('%1', self.scanners[row].get('name', '')))
 
     def delete_selected(self):
         rows = self._selected_rows()
@@ -713,7 +713,7 @@ class ScannerManagePage(QtWidgets.QWidget):
         reply = QtWidgets.QMessageBox.question(
             self,
             self.tr("删除扫描器"),
-            self.tr("删除 %1 个已选中的扫描器？").arg(str(len(rows))),
+            self.tr("删除 %1 个已选中的扫描器？").replace('%1', str(len(rows))),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No,
         )
@@ -749,7 +749,7 @@ class ScannerManagePage(QtWidgets.QWidget):
             return
 
         self._set_running(True)
-        self.scan_log.emit(self.tr("开始为 %1 个扫描器运行扫描...").arg(str(len(scanners))))
+        self.scan_log.emit(self.tr("开始为 %1 个扫描器运行扫描...").replace('%1', str(len(scanners))))
 
         def worker():
             summary = {
@@ -814,11 +814,7 @@ class ScannerManagePage(QtWidgets.QWidget):
         scanners = summary.get("scanner_count", 0)
         work_folder = summary.get("work_folder", "")
 
-        self.status_label.setText(
-            self.tr("扫描完成。扫描器=%1，已创建=%2，已跳过=%3，错误=%4，输出=%5")
-            .arg(str(scanners))
-            .arg(str(created))
-            .arg(str(skipped))
-            .arg(str(errors))
-            .arg(work_folder)
-        )
+        text = self.tr("扫描完成。扫描器=%1，已创建=%2，已跳过=%3，错误=%4，输出=%5")
+        text = text.replace('%1', str(scanners)).replace('%2', str(created)).replace('%3', str(skipped))
+        text = text.replace('%4', str(errors)).replace('%5', work_folder)
+        self.status_label.setText(text)

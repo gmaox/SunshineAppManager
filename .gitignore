@@ -5,3 +5,4 @@ dist/
 build/
 config/scanners.json
 SunshineAppManager.spec
+i18n/
