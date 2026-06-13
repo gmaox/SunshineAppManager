@@ -748,7 +748,7 @@ class MainWindow(QMainWindow):
         if self.translator:
             app.removeTranslator(self.translator)
         # 翻译文件路径
-        i18n_dir = os.path.join(basic_def.SCRIPT_DIR, 'i18n')
+        i18n_dir = os.path.join(basic_def.SCRIPT_DIR, '_internal/i18n')
         qm_path = os.path.join(i18n_dir, f'app_{lang_code}.qm')
         if os.path.exists(qm_path):
             self.translator.load(qm_path)

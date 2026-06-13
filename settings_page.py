@@ -197,7 +197,7 @@ class SettingsPage(QWidget):
         
         # 5. 下拉列表（语言）
         language_layout = QHBoxLayout()
-        language_label = QLabel(self.tr("语言："))
+        language_label = QLabel(self.tr("语言/Language："))
         language_label.setFont(QFont("Segoe UI", 12))
         self.language_combo = QComboBox()
         self.language_combo.addItem("中文", "zh_CN")
