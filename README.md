@@ -7,6 +7,7 @@ English README
 
 One-click import of all application and game shortcuts in the working directory into Sunshine, with automatic metadata and cover artwork handling.
 
+https://discord.gg/ZZBwvfht3
 ## Interface Preview
 
 <img width="1251" height="625" alt="image" src="https://github.com/user-attachments/assets/8cc22480-fb0f-4102-a83a-d4e33648a7ac" />
