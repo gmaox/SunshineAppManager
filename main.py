@@ -506,7 +506,7 @@ class MainWindow(QMainWindow):
         self.translator = QTranslator()
         self._apply_language(basic_def.language)
 
-        self.setWindowTitle(self.tr("Sunshine App Manager v1.1"))
+        self.setWindowTitle("Sunshine App Manager v1.2")
         self.resize(900, 480)
 
         tab_names = [

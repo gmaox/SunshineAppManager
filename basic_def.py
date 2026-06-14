@@ -102,8 +102,11 @@ def normalize_cover_for_disk(filename, data):
 
 
 def sync_apps_json_image_paths_to_png(apps_json):
-    """确保 apps.json 中 image-path 的文件名后缀与磁盘 PNG 封面一致。"""
+    """确保 apps.json 中 image-path 的文件名后缀与磁盘 PNG 封面一致（仅处理新增条目）。"""
     for entry in apps_json.get("apps", []):
+        # 仅处理新增条目：新增条目带有 cover_bytes，原有条目没有
+        if "cover_bytes" not in entry:
+            continue
         image_path = entry.get("image-path")
         if not image_path:
             continue
