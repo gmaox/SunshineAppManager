@@ -2031,9 +2031,9 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
             new_entries.append(app_entry)
             print(f"新加入: {shortcut_file}")
 
-    # 新游戏放在参与排序的游戏槽位最前面（保持本次选择内的先后顺序）
+    # 新游戏追加到 apps 列表末尾
     if new_entries:
-        apps_json["apps"][0:0] = new_entries
+        apps_json["apps"].extend(new_entries)
 
     # 如果启用了伪排序，更新名称前缀
     if pseudo_sorting_enabled:
