@@ -64,7 +64,12 @@ class SettingsPage(QWidget):
         enable_notify_layout.addStretch()
         settings_layout.addLayout(enable_notify_layout)
         
-        # 4. 添加后重启sunshine（默认关闭）
+        # 4. 添加后重启sunshine（仅在新方式失败回退旧方式且已安装 Sunshine 时显示）
+        self.restart_sunshine_widget = QWidget()
+        restart_sunshine_container_layout = QVBoxLayout(self.restart_sunshine_widget)
+        restart_sunshine_container_layout.setContentsMargins(0, 0, 0, 0)
+        restart_sunshine_container_layout.setSpacing(6)
+
         restart_sunshine_layout = QHBoxLayout()
         restart_sunshine_label = QLabel(self.tr("添加后重启sunshine："))
         restart_sunshine_label.setFont(QFont("Segoe UI", 12))
@@ -74,7 +79,7 @@ class SettingsPage(QWidget):
         restart_sunshine_layout.addWidget(restart_sunshine_label)
         restart_sunshine_layout.addWidget(self.restart_sunshine_checkbox)
         restart_sunshine_layout.addStretch()
-        settings_layout.addLayout(restart_sunshine_layout)
+        restart_sunshine_container_layout.addLayout(restart_sunshine_layout)
 
         restart_sunshine_hint = QLabel(
             self.tr("开启后每次添加应用都会尝试重启 sunshine 以应用更改，默认关闭是为了避免串流时添加应用突然断开的突兀体验。"
@@ -83,7 +88,10 @@ class SettingsPage(QWidget):
         restart_sunshine_hint.setFont(QFont("Segoe UI", 10))
         restart_sunshine_hint.setWordWrap(True)
         restart_sunshine_hint.setStyleSheet("color: #888888;")
-        settings_layout.addWidget(restart_sunshine_hint)
+        restart_sunshine_container_layout.addWidget(restart_sunshine_hint)
+
+        settings_layout.addWidget(self.restart_sunshine_widget)
+        self.refresh_restart_sunshine_visibility()
 
         # 图像路径写入方式（默认绝对路径）
         image_relative_layout = QHBoxLayout()
@@ -98,7 +106,7 @@ class SettingsPage(QWidget):
         settings_layout.addLayout(image_relative_layout)
 
         image_relative_hint = QLabel(
-            self.tr("该选项用于解决'基地版sunshine'在自身应用管理中的图像显示问题，开启后会按照基地版规则写入apps.json。"
+            self.tr("该选项用于解决'基地版sunshine部分版本'在自身应用管理中的图像显示问题，开启后会按照基地的规则写入apps.json。"
             "非基地版或版本较低的基地版开启该选项会导致sunshine读不到应用图像！")
         )
         image_relative_hint.setFont(QFont("Segoe UI", 10))
@@ -402,6 +410,24 @@ class SettingsPage(QWidget):
             basic_def.save_config()
         except Exception as e:
             print(f"保存 restart_sunshine_after_add 失败: {e}")
+
+    def _should_show_restart_sunshine(self):
+        """仅当新方式失败回退过旧方式，且 Sunshine 已安装时才显示重启选项"""
+        try:
+            return bool(getattr(basic_def, "sunshine_api_fallback_used", False)) and basic_def.is_sunshine_installed()
+        except Exception:
+            return False
+
+    def refresh_restart_sunshine_visibility(self):
+        try:
+            self.restart_sunshine_checkbox.setChecked(basic_def.restart_sunshine_after_add)
+            self.restart_sunshine_widget.setVisible(self._should_show_restart_sunshine())
+        except Exception as e:
+            print(f"刷新重启选项可见性失败: {e}")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh_restart_sunshine_visibility()
 
     def on_image_relative_changed(self, state):
         try:

@@ -33,6 +33,7 @@ image_path_use_relative = False  # apps.json 中 image-path 使用相对路径�
 language = "zh_CN"  # 语言设置，默认为简体中文
 autorun_scanner = False  # 进入添加游戏页时自动运行已启用的扫描器，默认关闭
 apply_sgdb_name = True  # run 后扫描器处理封面时，SGDB 命中后自动应用 SGDB 游戏名称，默认开启
+sunshine_api_fallback_used = False  # 新导入方式（Sunshine Web API）失败并回退到旧方式时置为 True
 
 def get_app_install_path():
     app_name = "sunshine"
@@ -170,10 +171,12 @@ def load_apps_json(json_path):
         # 如果文件不存在，返回一个空的基础结构
         return {"env": "", "apps": []}
     
-def save_apps_json(apps_json, file_path, extra_covers=None):
+def save_apps_json(apps_json, file_path, extra_covers=None, apply_to_sunshine=True):
     """
     保存 apps.json 与封面到 Sunshine 配置目录。仅在此处临时启动管理员进程完成写入，主程序保持普通权限。
     extra_covers: 可选 [(filename, bytes), ...]，例如管理界面更换封面时传入。
+    apply_to_sunshine: 写入后是否通过 Sunshine Web API 应用更改；成功时无需重启 Sunshine。
+    返回: bool，表示 API 应用是否成功（未安装 Sunshine 或禁用时返回 False）。
     """
     cover_tuples = []
     for entry in apps_json.get('apps', []):
@@ -212,9 +215,17 @@ def save_apps_json(apps_json, file_path, extra_covers=None):
             print("已清空 temp 目录")
         except Exception as e:
             print(f"清空 temp 目录失败: {e}")
+
+    # 新方式：通过 Sunshine Web API 应用更改，成功则无需重启 Sunshine
+    api_applied = False
+    if apply_to_sunshine and is_sunshine_installed():
+        api_applied, api_message = push_apps_to_sunshine(apps_json)
+        print(f"Sunshine API 应用更改: {api_message}")
+        set_sunshine_api_fallback(not api_applied)
+    return api_applied
 def load_config():
     """加载配置文件并同步 `folder_selected` 变量"""
-    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme, image_path_use_relative, language, autorun_scanner, apply_sgdb_name
+    global close_after_completion, pseudo_sorting_enabled, hidden_files, folder, folder_selected, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme, image_path_use_relative, language, autorun_scanner, apply_sgdb_name, sunshine_api_fallback_used
     # 优先使用 UTF-8 打开配置文件以避免系统默认编码（如 GBK）导致的 UnicodeDecodeError。
     # 如果文件不存在则跳过，后续会调用 save_config() 创建默认文件。
     if os.path.exists(config_file_path):
@@ -256,6 +267,8 @@ def load_config():
     autorun_scanner = config.getboolean('Settings', 'autorun_scanner', fallback=False)
     # 新增 apply_sgdb_name
     apply_sgdb_name = config.getboolean('Settings', 'apply_sgdb_name', fallback=True)
+    # 新导入方式失败并回退旧方式的标记
+    sunshine_api_fallback_used = config.getboolean('Settings', 'sunshine_api_fallback_used', fallback=False)
     if os.path.exists(config_file_path)==False:
         save_config()  #没有配置文件保存下
     # 检查 folder 是否有效
@@ -274,7 +287,7 @@ def load_config():
 def save_config():
     """保存选择的目录到配置文件"""
     try:
-        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme, image_path_use_relative, language, autorun_scanner, apply_sgdb_name  # 添加全局变量声明
+        global hidden_files, folder, folder_selected, close_after_completion, pseudo_sorting_enabled, steam_excluded_games, auto_delete_orphaned_entries, restart_sunshine_after_add, theme, image_path_use_relative, language, autorun_scanner, apply_sgdb_name, sunshine_api_fallback_used  # 添加全局变量声明
         # 优先使用运行时的 `folder_selected`，保持一致性
         if folder_selected:
             folder = folder_selected
@@ -305,6 +318,8 @@ def save_config():
             'autorun_scanner': str(autorun_scanner),
             # 新增 apply_sgdb_name
             'apply_sgdb_name': str(apply_sgdb_name),
+            # 新导入方式失败并回退旧方式的标记
+            'sunshine_api_fallback_used': str(sunshine_api_fallback_used),
         }
         
         # 保留 ignored_apps 如果存在
@@ -866,13 +881,94 @@ def restart_service():
     发送POST请求以重启服务
     """
     try:
-        response = requests.post('https://localhost:47990/api/restart', verify=False)
+        port = get_sunshine_web_port()
+        response = requests.post(f'https://localhost:{port}/api/restart', verify=False, timeout=5)
         if response.status_code == 200:
             print("sunshine服务重启")
         else:
             print(f"sunshine服务重启")
     except requests.exceptions.RequestException as e:
         print(f"sunshine服务已重启")
+
+
+def is_sunshine_installed():
+    """判断 Sunshine 是否已安装（存在配置文件或 apps.json）"""
+    try:
+        return (os.path.isfile(os.path.join(APP_INSTALL_PATH, "config", "sunshine.conf"))
+                or os.path.isfile(get_sunshine_apps_json_path()))
+    except Exception:
+        return False
+
+
+def get_sunshine_web_port(default=47990):
+    """从 sunshine.conf 读取 Web 管理端口"""
+    conf_path = os.path.join(APP_INSTALL_PATH, "config", "sunshine.conf")
+    try:
+        if os.path.isfile(conf_path):
+            with open(conf_path, "r", encoding="utf-8", errors="ignore") as f:
+                for raw_line in f:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    if key.strip() == "port":
+                        return int(value.strip())
+    except Exception as e:
+        print(f"读取 sunshine.conf 端口失败: {e}")
+    return default
+
+
+def push_apps_to_sunshine(apps_json):
+    """
+    通过 Sunshine Web 管理 API（POST /api/apps）整体保存应用列表并触发刷新，
+    避免写文件后必须重启 Sunshine。本机回环请求无需登录凭据。
+    返回 (是否成功, 提示信息)。
+    """
+    apps_for_send = copy.deepcopy(apps_json)
+    for entry in apps_for_send.get("apps", []):
+        entry.pop("cover_bytes", None)
+
+    payload = {"apps": apps_for_send.get("apps", []), "editApp": {}}
+    port = get_sunshine_web_port()
+    last_error = None
+    try:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    except Exception:
+        pass
+
+    for scheme in ("https", "http"):
+        url = f"{scheme}://127.0.0.1:{port}/api/apps"
+        try:
+            resp = requests.post(url, json=payload, timeout=5, verify=False)
+        except Exception as e:
+            last_error = str(e)
+            continue
+        if resp.status_code != 200:
+            last_error = f"HTTP {resp.status_code}"
+            continue
+        try:
+            data = resp.json()
+        except Exception:
+            data = {}
+        if str(data.get("status", "true")).lower() == "false":
+            return False, str(data.get("error") or "Sunshine 拒绝保存")
+        return True, "已通过 API 应用更改"
+
+    return False, last_error or "无法连接 Sunshine"
+
+
+def set_sunshine_api_fallback(used):
+    """记录新导入方式是否失败回退（仅在配置已加载时写盘，避免子进程覆盖用户配置）"""
+    global sunshine_api_fallback_used
+    if sunshine_api_fallback_used == bool(used):
+        return
+    sunshine_api_fallback_used = bool(used)
+    try:
+        if config.has_section('Settings'):
+            save_config()
+    except Exception as e:
+        print(f"保存回退标记失败: {e}")
 
 def find_unused_index(apps_json, image_target_paths):
     existing_indices = {int(entry["image-path"].split("output_image")[-1].split(".png")[0]) for entry in apps_json['apps'] if "output_image" in entry.get("image-path", "")}
@@ -1761,7 +1857,7 @@ def generate_covers_for_entries(pending_entries, output_folder, progress_callbac
 def runtomain():
     """
     扫描工作目录中的 .lnk / .url，通过 main window 显示确认窗口供用户选择要写入 Sunshine 的应用。
-    在窗口显示期间后台异步生成封面，确认后再写入 apps.json 并重启 Sunshine。
+    在窗口显示期间后台异步生成封面，确认后写入 apps.json，并优先通过 Sunshine API 应用更改（失败时回退重启）。
     """
     global folder_selected, close_after_completion, pseudo_sorting_enabled, lnkandurl_files
 
@@ -1914,6 +2010,7 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
     global pseudo_sorting_enabled, close_after_completion, restart_sunshine_after_add
 
     # 将选中的条目写入 apps.json（封面由 save_apps_json 通过提升权限统一写入）
+    new_entries = []
     for entry in selected_entries:
         shortcut_file = entry["shortcut_file"]
         image_index = entry["image_index"]
@@ -1931,8 +2028,12 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
             if cover_bytes:
                 app_entry["cover_bytes"] = cover_bytes
 
-            apps_json["apps"].append(app_entry)
+            new_entries.append(app_entry)
             print(f"新加入: {shortcut_file}")
+
+    # 新游戏放在参与排序的游戏槽位最前面（保持本次选择内的先后顺序）
+    if new_entries:
+        apps_json["apps"][0:0] = new_entries
 
     # 如果启用了伪排序，更新名称前缀
     if pseudo_sorting_enabled:
@@ -1941,9 +2042,10 @@ def _process_confirm_add_entries(selected_entries, apps_json, apps_json_path):
             entry["name"] = f"{idx:02d} {entry['name']}"
         print("已添加伪排序标志")
 
-    save_apps_json(apps_json, apps_json_path)
+    api_applied = save_apps_json(apps_json, apps_json_path)
 
-    if restart_sunshine_after_add:
+    # 新方式失败时才回退到旧方式（重启 Sunshine 使其重新读取 apps.json）
+    if not api_applied and restart_sunshine_after_add and is_sunshine_installed():
         restart_service()
 
     if close_after_completion:

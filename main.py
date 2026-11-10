@@ -35,9 +35,44 @@ if __name__ == "__main__" and ("--choosecover" in sys.argv or "--delete" in sys.
     def _normalize_name(name: str) -> str:
         return "" if name is None else " ".join(str(name).strip().split()).lower()
 
+    def _strip_pseudo_prefix(value: str) -> str:
+        """去掉伪排序添加的两位数字前缀（如 "00 "）。"""
+        import re
+        return re.sub(r"^\d{2} ", "", value or "")
+
+    def _collect_shortcut_files(entry):
+        """收集条目 cmd/detached 中指向的 .lnk / .url 快捷方式文件。"""
+        candidates = []
+        cmd = entry.get("cmd")
+        if isinstance(cmd, str) and cmd.strip():
+            candidates.append(cmd.strip().strip('"'))
+        detached = entry.get("detached")
+        if isinstance(detached, (list, tuple)):
+            for item in detached:
+                if isinstance(item, str) and item.strip():
+                    candidates.append(item.strip().strip('"'))
+        return [c for c in candidates if c.lower().endswith((".lnk", ".url"))]
+
+    def _delete_shortcut_files(entries):
+        """删除条目对应的 .lnk / .url 文件，避免下次扫描又出现在“待添加”中。"""
+        shortcuts = []
+        for entry in entries:
+            for path in _collect_shortcut_files(entry):
+                if path not in shortcuts:
+                    shortcuts.append(path)
+        for path in shortcuts:
+            if not os.path.exists(path):
+                print(f"快捷方式不存在，跳过: {path}")
+                continue
+            try:
+                os.remove(path)
+                print(f"已删除快捷方式: {path}")
+            except Exception as exc:
+                print(f"删除快捷方式失败: {path} ({exc})")
+
     apps_json_path = os.path.join(APP_INSTALL_PATH, "config", "apps.json")
     if not os.path.exists(apps_json_path):
-        save_apps_json({"env": "", "apps": []}, apps_json_path)
+        save_apps_json({"env": "", "apps": []}, apps_json_path, apply_to_sunshine=False)
     apps_json = load_apps_json(apps_json_path)
 
     args = sys.argv[1:]
@@ -83,15 +118,23 @@ if __name__ == "__main__" and ("--choosecover" in sys.argv or "--delete" in sys.
             game_name = args[i + 1]
             i += 2
             norm_target = _normalize_name(game_name)
-            before = len(apps_json.get("apps", []))
-            apps_json["apps"] = [
-                e for e in apps_json.get("apps", [])
-                if _normalize_name(e.get("name")) != norm_target
-            ]
-            removed = before - len(apps_json.get("apps", []))
-            if removed:
+            apps_list = apps_json.get("apps", [])
+            # 先按原始名称精确匹配
+            removed_entries = [e for e in apps_list if _normalize_name(e.get("name")) == norm_target]
+            # 兼容伪排序：apps.json 里可能存的是 "00 游戏名"，而调用方传入的是去掉前缀的显示名
+            if not removed_entries:
+                removed_entries = [
+                    e for e in apps_list
+                    if _strip_pseudo_prefix(str(e.get("name") or "")) != str(e.get("name") or "")
+                    and _normalize_name(_strip_pseudo_prefix(str(e.get("name") or ""))) == norm_target
+                ]
+            if removed_entries:
+                removed_ids = {id(e) for e in removed_entries}
+                apps_json["apps"] = [e for e in apps_list if id(e) not in removed_ids]
                 save_apps_json(apps_json, apps_json_path)
-                print(f"已删除 {removed} 个名称为 '{game_name}' 的游戏")
+                # 同时删除对应的 .lnk / .url，否则扫描时又会出现在“待添加”里
+                _delete_shortcut_files(removed_entries)
+                print(f"已删除 {len(removed_entries)} 个名称为 '{game_name}' 的游戏")
             else:
                 print(f"未找到名称为 '{game_name}' 的游戏")
                 ok = False
@@ -553,7 +596,7 @@ class MainWindow(QMainWindow):
         self.translator = QTranslator()
         self._apply_language(basic_def.language)
 
-        self.setWindowTitle("Sunshine App Manager v1.4")
+        self.setWindowTitle("Sunshine App Manager v1.5")
         # 手柄激活标志：未操作手柄前不显示焦点高亮
         self._gamepad_active = False
         self.resize(1080, 480)
@@ -1296,6 +1339,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """窗口关闭时释放手柄资源。"""
+        # 先停止确认窗口的封面线程，避免退出时线程仍在回调 Qt 对象
+        confirm_win = getattr(self, "confirm_add_window", None)
+        if confirm_win is not None:
+            try:
+                confirm_win.shutdown_cover_thread()
+            except Exception:
+                pass
         if getattr(self, "_gamepad_timer", None) is not None:
             try:
                 self._gamepad_timer.stop()
@@ -1322,6 +1372,11 @@ class MainWindow(QMainWindow):
         
         # 如果之前的窗口存在，删除它
         if self.confirm_add_window is not None and self.confirm_add_page_index is not None:
+            # 先停止旧窗口的封面线程，避免销毁后线程仍回调 Qt 对象导致 C++ 崩溃
+            try:
+                self.confirm_add_window.shutdown_cover_thread()
+            except Exception:
+                pass
             widget = self.stacked.widget(self.confirm_add_page_index)
             self.stacked.removeWidget(widget)
             widget.deleteLater()

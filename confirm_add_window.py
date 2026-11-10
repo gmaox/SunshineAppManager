@@ -330,11 +330,12 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
         bottom.addStretch()
 
-        # 添加重启提示标签（开关开启时显示）
+        # 添加重启提示标签（仅在新方式失败回退旧方式、且开关开启时显示）
         self.restart_hint_label = QtWidgets.QLabel(self.tr("写入会重启sunshine"))
         self.restart_hint_label.setStyleSheet('font-size:8px;padding:0px;margin:0px;')
         from basic_def import restart_sunshine_after_add as current_value
-        self.restart_hint_label.setVisible(current_value)
+        from basic_def import sunshine_api_fallback_used as fallback_used
+        self.restart_hint_label.setVisible(current_value and fallback_used)
         bottom.addWidget(self.restart_hint_label)
 
         self.confirm_btn = QtWidgets.QPushButton(self.tr("写入 Sunshine"))
@@ -426,7 +427,7 @@ class ConfirmAddWindow(QtWidgets.QWidget):
 
     def closeEvent(self, event):
         """When the window is closed we should cancel any pending cover generation."""
-        self._cancel_cover_event.set()
+        self.shutdown_cover_thread()
         super().closeEvent(event)
 
     def eventFilter(self, watched, event):
@@ -576,20 +577,38 @@ class ConfirmAddWindow(QtWidgets.QWidget):
         self._enter_terminate_mode()
 
         def worker():
-            image_target_paths, need_choose_cover_names = generate_covers_for_entries(
-                self.pending_entries,
-                self.output_folder,
-                progress_callback=lambda payload: self.cover_progress.emit(payload),
-                cover_ready_callback=lambda entry, source: self.cover_item_ready.emit(entry, source),
-                cancel_event=self._cancel_cover_event,
-                cancel_sgdb_event=self._cancel_sgdb_event
-            )
+            try:
+                image_target_paths, need_choose_cover_names = generate_covers_for_entries(
+                    self.pending_entries,
+                    self.output_folder,
+                    progress_callback=lambda payload: self.cover_progress.emit(payload),
+                    cover_ready_callback=lambda entry, source: self.cover_item_ready.emit(entry, source),
+                    cancel_event=self._cancel_cover_event,
+                    cancel_sgdb_event=self._cancel_sgdb_event
+                )
+            except Exception as e:
+                # 线程内的任何异常都不能逃逸，否则会打印到日志并被误认为崩溃
+                print(f"封面生成线程异常: {e}")
+                return
             self.image_target_paths = image_target_paths
             self.need_choose_cover_names = need_choose_cover_names
-            self.covers_finished.emit()
+            try:
+                self.covers_finished.emit()
+            except RuntimeError:
+                # 窗口已被销毁（例如重新打开添加窗口），忽略即可
+                pass
 
         self._cover_thread = threading.Thread(target=worker, daemon=True)
         self._cover_thread.start()
+
+    def shutdown_cover_thread(self, timeout=3.0):
+        """取消并等待封面线程结束，避免窗口销毁后线程继续访问 Qt 对象导致 C++ 崩溃。"""
+        self._cancel_cover_event.set()
+        self._cancel_sgdb_event.set()
+        thread = self._cover_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout)
+        self._cover_thread = None
 
     def _enter_terminate_mode(self):
         """封面生成期间：把"写入 Sunshine"按钮复用为"终止封面获取"。"""
@@ -696,7 +715,8 @@ class ConfirmAddWindow(QtWidgets.QWidget):
     def update_restart_hint(self):
         """更新重启提示标签的显示状态"""
         from basic_def import restart_sunshine_after_add as current_value
-        self.restart_hint_label.setVisible(current_value)
+        from basic_def import sunshine_api_fallback_used as fallback_used
+        self.restart_hint_label.setVisible(current_value and fallback_used)
 
     def _on_confirm_clicked(self):
         selected = [e for e in self.pending_entries if e.get('selected', True)]
